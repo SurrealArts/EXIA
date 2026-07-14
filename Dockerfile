@@ -1,4 +1,4 @@
-FROM node:22-slim AS build
+FROM node:26-slim AS build
 ENV NODE_ENV=production
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm install --frozen-lockfile --prod
 
-FROM node:22-slim
+FROM node:26-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
