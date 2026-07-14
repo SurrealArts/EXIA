@@ -1,0 +1,17 @@
+services:
+  exia:
+    build: .
+    image: ghcr.io/surrealarts/exia:latest
+    container_name: exia-bot
+    env_file: .env
+    volumes:
+      - exia_data:/app/data
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  exia_data:
