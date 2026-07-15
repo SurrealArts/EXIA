@@ -1,14 +1,16 @@
-import { parentPort, workerData } from "node:worker_threads";
+import { parentPort } from "node:worker_threads";
 
-try {
-  const { pattern, content } = workerData;
-  const regex = new RegExp(pattern, "gi");
-  const matched = regex.test(content);
-  parentPort.postMessage({ matched });
-} catch (err) {
-  parentPort.postMessage({
-    matched: true,
-    fastTrack: true,
-    error: err.message,
-  });
-}
+parentPort.on("message", ({ id, pattern, content }) => {
+  try {
+    const regex = new RegExp(pattern, "i");
+    const matched = regex.test(content);
+    parentPort.postMessage({ id, matched });
+  } catch (err) {
+    parentPort.postMessage({
+      id,
+      matched: true,
+      fastTrack: true,
+      error: err.message,
+    });
+  }
+});

@@ -1,27 +1,43 @@
 import { clog } from "./clog.js";
+import { t, getGuildLanguage } from "../core/locale.js";
+
+const LOG_TAG = "[src/utils/telemetryQueue.js]";
 
 const BATCH_INTERVAL_MS = 5_000;
 const EMBED_MAX_FIELDS = 25;
 const FIELD_VALUE_LIMIT = 1024;
 
 /**
- * In-memory batching queues for log payloads.
- * @type {{ action: string[], flag: string[], command: string[] }}
+ * In-memory batching queues for log payloads, keyed by guild ID.
+ * @type {Map<string, { action: string[], flag: string[], command: string[] }>}
  */
-const queues = {
-  action: [],
-  flag: [],
-  command: [],
-};
+const queues = new Map();
 
 let flushInterval = null;
 
 /**
- * Returns total pending entries across all queues.
+ * Returns a new empty queue bucket.
+ * @returns {{ action: string[], flag: string[], command: string[] }}
+ */
+function emptyBucket() {
+  return { action: [], flag: [], command: [] };
+}
+
+/**
+ * Returns the total pending entries, optionally for a single guild.
+ * @param {string} [guildId]
  * @returns {number}
  */
-export function getQueueLength() {
-  return queues.action.length + queues.flag.length + queues.command.length;
+export function getQueueLength(guildId) {
+  if (guildId) {
+    const q = queues.get(guildId);
+    return q ? q.action.length + q.flag.length + q.command.length : 0;
+  }
+  let total = 0;
+  for (const q of queues.values()) {
+    total += q.action.length + q.flag.length + q.command.length;
+  }
+  return total;
 }
 
 /**
@@ -55,16 +71,21 @@ export function stopTelemetryFlusher() {
 }
 
 /**
- * Enqueues a log entry.
+ * Enqueues a log entry for a specific guild.
  *
  * @param {'action'|'flag'|'command'} category
+ * @param {string} guildId
  * @param {string} message
  */
-export function enqueue(category, message) {
-  if (!queues[category]) {
+export function enqueue(category, guildId, message) {
+  if (!queues.has(guildId)) {
+    queues.set(guildId, emptyBucket());
+  }
+  const bucket = queues.get(guildId);
+  if (!bucket[category]) {
     return;
   }
-  queues[category].push(message);
+  bucket[category].push(message);
 }
 
 /**
@@ -81,50 +102,61 @@ async function flushQueues(client) {
     )
     .all();
 
-  for (const { log_channel_id: channelId } of guildIds) {
+  for (const { guild_id: guildId, log_channel_id: channelId } of guildIds) {
+    const bucket = queues.get(guildId);
+    if (!bucket) {
+      continue;
+    }
+
     const messages = [];
 
-    for (const category of /** @type {const} */ ([
-      "action",
-      "flag",
-      "command",
-    ])) {
-      if (queues[category].length > 0) {
-        const batch = queues[category].splice(0, queues[category].length);
-        messages.push(
-          ...batch.map((msg) => `**${category.toUpperCase()}** ${msg}`),
-        );
+    for (const category of /** @type {const} */ (["action", "flag", "command"])) {
+      if (bucket[category].length > 0) {
+        const batch = bucket[category].splice(0, bucket[category].length);
+        messages.push(...batch.map((msg) => `• **${category.toUpperCase()}** ${msg}`));
       }
     }
 
     if (messages.length === 0) {
-      return;
+      queues.delete(guildId);
+      continue;
     }
 
     try {
-      const channel = await client.channels.fetch(channelId);
+      const channel = client.channels.cache.get(channelId);
       if (!channel?.isTextBased()) {
         continue;
       }
 
+      const lang = getGuildLanguage(db, guildId);
       const chunks = chunkMessages(messages);
 
       for (const chunk of chunks) {
         const { EmbedBuilder } = await import("discord.js");
         const embed = new EmbedBuilder()
           .setColor(0x5865f2)
-          .setTitle("EXIA Telemetry")
+          .setTitle(t(lang, "telemetry.title"))
           .setTimestamp()
           .setDescription(chunk.join("\n"));
 
         await channel.send({ embeds: [embed] });
       }
     } catch (err) {
-      clog(
-        console.error,
-        "[src/utils/telemetryQueue.js] Failed to send log:",
-        err,
-      );
+      clog(console.error, `${LOG_TAG} Failed to send log:`, err);
+    }
+
+    // Clean up empty bucket after sending
+    const b = queues.get(guildId);
+    if (b && !b.action.length && !b.flag.length && !b.command.length) {
+      queues.delete(guildId);
+    }
+  }
+
+  // Remove stale queues for guilds with no log channel configured
+  const configured = new Set(guildIds.map((r) => r.guild_id));
+  for (const [gid] of queues) {
+    if (!configured.has(gid)) {
+      queues.delete(gid);
     }
   }
 }
@@ -134,19 +166,16 @@ async function flushQueues(client) {
  * @param {string[]} messages
  * @returns {string[][]}
  */
-function chunkMessages(messages) {
+export function chunkMessages(messages) {
   const chunks = [];
   let current = [];
   let currentLength = 0;
 
   for (const msg of messages) {
-    const line = `• ${msg}`;
+    const line = msg;
     const lineLen = line.length;
 
-    if (
-      current.length >= EMBED_MAX_FIELDS ||
-      currentLength + lineLen > FIELD_VALUE_LIMIT
-    ) {
+    if (current.length >= EMBED_MAX_FIELDS || currentLength + lineLen > FIELD_VALUE_LIMIT) {
       chunks.push(current);
       current = [];
       currentLength = 0;

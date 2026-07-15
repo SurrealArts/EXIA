@@ -1,31 +1,60 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { t } from "../core/locale.js";
 
-/**
- * /raid command — manual raid mode control.
- * @type {import('discord.js').SlashCommandBuilder}
- */
 export const raidCommand = new SlashCommandBuilder()
   .setName("raid")
-  .setDescription("Raid protection controls")
+  .setDescription(t("en", "command.raid.description"))
+  .setDescriptionLocalizations({ ja: t("ja", "command.raid.description") })
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 
   .addSubcommand((sub) =>
     sub
       .setName("stage")
-      .setDescription("Set raid stage manually")
+      .setDescription(t("en", "command.raid.stage.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.raid.stage.description") })
       .addIntegerOption((opt) =>
         opt
           .setName("stage")
-          .setDescription("Raid stage (0 = off, 1-3 = active)")
+          .setDescription(t("en", "command.raid.stage.options.stage.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.raid.stage.options.stage.description"),
+          })
           .setRequired(true)
           .addChoices(
-            { name: "Stage 0 — Inactive", value: 0 },
-            { name: "Stage 1 — Slowmode 30m", value: 1 },
-            { name: "Stage 2 — Slowmode 2h", value: 2 },
-            { name: "Stage 3 — Lockdown", value: 3 },
+            {
+              name: t("en", "command.raid.stage.options.stage.choices.stage0"),
+              value: 0,
+              name_localizations: {
+                ja: t("ja", "command.raid.stage.options.stage.choices.stage0"),
+              },
+            },
+            {
+              name: t("en", "command.raid.stage.options.stage.choices.stage1"),
+              value: 1,
+              name_localizations: {
+                ja: t("ja", "command.raid.stage.options.stage.choices.stage1"),
+              },
+            },
+            {
+              name: t("en", "command.raid.stage.options.stage.choices.stage2"),
+              value: 2,
+              name_localizations: {
+                ja: t("ja", "command.raid.stage.options.stage.choices.stage2"),
+              },
+            },
+            {
+              name: t("en", "command.raid.stage.options.stage.choices.stage3"),
+              value: 3,
+              name_localizations: {
+                ja: t("ja", "command.raid.stage.options.stage.choices.stage3"),
+              },
+            },
           ),
       ),
   )
   .addSubcommand((sub) =>
-    sub.setName("status").setDescription("Check current raid stage"),
+    sub
+      .setName("status")
+      .setDescription(t("en", "command.raid.status.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.raid.status.description") }),
   );

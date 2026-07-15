@@ -1,5 +1,12 @@
+import globals from "globals";
+
 export default [
   {
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "no-console": "off",
@@ -7,7 +14,7 @@ export default [
       "no-var": "error",
       eqeqeq: ["error", "always"],
       curly: ["error", "all"],
-      "no-undef": "off",
+      "no-undef": "error",
     },
   },
 ];

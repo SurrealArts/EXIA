@@ -1,16 +1,16 @@
 import { getDatabase, applyStandardProfile } from "../core/database.js";
-import {
-  applyPressure,
-  acquireMutex,
-  releaseMutex,
-} from "../core/pressureEngine.js";
+import { applyPressure, acquireMutex, releaseMutex } from "../core/pressureEngine.js";
 import { consumeToken } from "../modules/velocityBucket.js";
 import { checkHoneypot } from "../modules/honeypotTrap.js";
 import { evaluateRegex } from "../modules/regexSandbox.js";
 import { auditProfile } from "../modules/userProfile.js";
 import { recordSpike } from "../modules/raidProtection.js";
 import { enqueue } from "../utils/telemetryQueue.js";
+import { cachedGet, cachedAll } from "../utils/queryCache.js";
 import { clog } from "../utils/clog.js";
+import { t, getGuildLanguage } from "../core/locale.js";
+
+const LOG_TAG = "[src/events/messageCreate.js]";
 
 /**
  * @param {import('discord.js').Message} message
@@ -26,10 +26,14 @@ export default async function handleMessageCreate(message) {
   const db = getDatabase();
   const guildId = message.guildId;
   const userId = message.author.id;
+  const lang = getGuildLanguage(db, guildId);
 
-  const guildConfig = db
-    .prepare("SELECT * FROM GuildConfiguration WHERE guild_id = ?")
-    .get(guildId);
+  const guildConfigRow = cachedGet(
+    db,
+    "SELECT * FROM GuildConfiguration WHERE guild_id = ?",
+    guildId,
+  );
+  let guildConfig = guildConfigRow;
 
   if (!guildConfig) {
     applyStandardProfile(guildId);
@@ -43,24 +47,21 @@ export default async function handleMessageCreate(message) {
     };
   }
 
-  const moduleWeights = db
-    .prepare(
-      "SELECT * FROM ModuleWeights WHERE guild_id = ? AND is_enabled = 1",
-    )
-    .all(guildId);
-
-  const weightMap = new Map(
-    moduleWeights.map((m) => [
-      m.module_name,
-      { weight: m.weight, is_critical: m.is_critical },
-    ]),
+  const moduleWeights = cachedAll(
+    db,
+    "SELECT * FROM ModuleWeights WHERE guild_id = ? AND is_enabled = 1",
+    guildId,
   );
 
-  const dbThresholds = db
-    .prepare(
-      "SELECT pressure_tier AS tier, pressure, action FROM ThresholdActions WHERE guild_id = ? ORDER BY pressure_tier",
-    )
-    .all(guildId);
+  const weightMap = new Map(
+    moduleWeights.map((m) => [m.module_name, { weight: m.weight, is_critical: m.is_critical }]),
+  );
+
+  const dbThresholds = cachedAll(
+    db,
+    "SELECT pressure_tier AS tier, pressure, action FROM ThresholdActions WHERE guild_id = ? ORDER BY pressure_tier",
+    guildId,
+  );
 
   const thresholds = dbThresholds.length > 0 ? dbThresholds : null;
 
@@ -70,38 +71,41 @@ export default async function handleMessageCreate(message) {
 
   clog(
     console.log,
-    `[src/events/messageCreate.js] Processing message from ${message.author.tag} (${userId}) in channel #${message.channel.name || message.channelId} | content: "${(message.content || "").slice(0, 100)}" | stickers: ${message.stickers?.size || 0}`,
+    `${LOG_TAG} Processing message from ${message.author.tag} (${userId}) in channel #${message.channel.name || message.channelId} | content: "${(message.content || "").slice(0, 100)}" | stickers: ${message.stickers?.size || 0}`,
   );
 
-  const honey = checkHoneypot(message, db);
+  const honey = checkHoneypot(message, guildConfig);
   clog(
     console.log,
-    `[src/events/messageCreate.js] Honeypot check — triggered: ${honey.triggered}, whitelisted: ${honey.whitelisted}`,
+    `${LOG_TAG} Honeypot check — triggered: ${honey.triggered}, whitelisted: ${honey.whitelisted}`,
   );
   if (honey.triggered && !honey.whitelisted) {
     highestAction = applyPressure(guildId, userId, 0, true);
     isFastTrack = true;
-    flagReasons.push("sent a message in a restricted channel");
+    flagReasons.push(t(lang, "flag.reason.honeypot"));
     clog(
       console.warn,
-      `[src/events/messageCreate.js] FAST-TRACK: Honeypot triggered — user ${userId} flagged for honeypot violation`,
+      `${LOG_TAG} FAST-TRACK: Honeypot triggered — user ${userId} flagged for honeypot violation`,
     );
   }
 
   const profileMod = weightMap.get("user_profile");
-  const profileEnabled = profileMod && profileMod.weight >= 0;
-  const profile = auditProfile(message.member);
+  const profileMember = message.member;
+  const profile = profileMember
+    ? auditProfile(profileMember, lang)
+    : { multiplier: 1, reasons: [] };
+  const profileEnabled = profileMod && profileMod.weight >= 0 && profileMember !== null;
   const multiplier = profileEnabled ? profile.multiplier : 1.0;
   clog(
     console.log,
-    `[src/events/messageCreate.js] user_profile module enabled: ${profileEnabled} | multiplier: ${multiplier}x | profile reasons: [${profile.reasons.join(", ")}]`,
+    `${LOG_TAG} user_profile module enabled: ${profileEnabled} | multiplier: ${multiplier}x | profile reasons: [${profile.reasons.join(", ")}]`,
   );
 
   if (!isFastTrack) {
     const velResult = consumeToken(guildId, userId, message.channelId);
     clog(
       console.log,
-      `[src/events/messageCreate.js] Velocity check — tokens: ${velResult.tokens}, exceeded: ${velResult.exceeded}, multiChannel: ${velResult.multiChannel}`,
+      `${LOG_TAG} Velocity check — tokens: ${velResult.remaining}, exceeded: ${velResult.exceeded}, multiChannel: ${velResult.multiChannel}`,
     );
     if (velResult.exceeded) {
       const mod = weightMap.get("velocity");
@@ -114,44 +118,31 @@ export default async function handleMessageCreate(message) {
       const critical = mod?.is_critical ?? false;
       clog(
         console.log,
-        `[src/events/messageCreate.js] Velocity exceeded — rawWeight: ${rawWeight}, multiplier: ${multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
+        `${LOG_TAG} Velocity exceeded — rawWeight: ${rawWeight}, multiplier: ${multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
       );
 
-      const velocityResult = applyPressure(
-        guildId,
-        userId,
-        weight,
-        critical,
-        thresholds,
-      );
+      const velocityResult = applyPressure(guildId, userId, weight, critical, thresholds);
       clog(
         console.log,
-        `[src/events/messageCreate.js] Velocity pressure result — action: ${velocityResult.action || "none"}, tier: ${velocityResult.tier || "N/A"}`,
+        `${LOG_TAG} Velocity pressure result — action: ${velocityResult.action || "none"}, tier: ${velocityResult.tier || "N/A"}`,
       );
       if (velocityResult.action) {
         highestAction = velocityResult;
       }
       flagReasons.push(
-        velResult.multiChannel
-          ? "sent messages in too many channels too quickly"
-          : "sent messages too quickly",
+        velResult.multiChannel ? t(lang, "flag.reason.multiChannel") : t(lang, "flag.reason.speed"),
       );
     }
   }
 
   if (!isFastTrack && message.content && !message.stickers?.size) {
-    const regexRules = db
-      .prepare("SELECT * FROM RegexRules WHERE guild_id = ?")
-      .all(guildId);
-    clog(
-      console.log,
-      `[src/events/messageCreate.js] Regex check — ${regexRules.length} rules configured`,
-    );
+    const regexRules = cachedAll(db, "SELECT * FROM RegexRules WHERE guild_id = ?", guildId);
+    clog(console.log, `${LOG_TAG} Regex check — ${regexRules.length} rules configured`);
 
     for (const rule of regexRules) {
       clog(
         console.log,
-        `[src/events/messageCreate.js]   Evaluating rule "${rule.rule_identifier}" — pattern: ${rule.pattern.slice(0, 60)}`,
+        `${LOG_TAG} Evaluating rule "${rule.rule_identifier}" — pattern: ${rule.pattern.slice(0, 60)}`,
       );
       const evalResult = await evaluateRegex(rule.pattern, message.content);
 
@@ -160,60 +151,50 @@ export default async function handleMessageCreate(message) {
         const critical = rule.is_critical === 1;
         clog(
           console.log,
-          `[src/events/messageCreate.js]   RULE MATCHED — threat_weight: ${rule.threat_weight}, multiplier: ${multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
+          `${LOG_TAG} RULE MATCHED — threat_weight: ${rule.threat_weight}, multiplier: ${multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
         );
 
-        const regexResult = applyPressure(
-          guildId,
-          userId,
-          weight,
-          critical,
-          thresholds,
-        );
+        const regexResult = applyPressure(guildId, userId, weight, critical, thresholds);
         clog(
           console.log,
-          `[src/events/messageCreate.js]   Regex pressure result — action: ${regexResult.action || "none"}, tier: ${regexResult.tier || "N/A"}`,
+          `${LOG_TAG} Regex pressure result — action: ${regexResult.action || "none"}, tier: ${regexResult.tier || "N/A"}`,
         );
         if (regexResult.action) {
           highestAction = regexResult;
         }
-        flagReasons.push(
-          `sent a message matching the "${rule.rule_identifier}" pattern`,
-        );
+        flagReasons.push(t(lang, "flag.reason.regex", { ruleIdentifier: rule.rule_identifier }));
         break;
       }
     }
   }
 
   if (profile.reasons.length > 0) {
-    const profileReasons = profile.reasons.map((r) => r.toLowerCase());
+    const profileReasons = [...profile.reasons];
     flagReasons.push(...profileReasons);
-    clog(
-      console.log,
-      `[src/events/messageCreate.js] Profile flags: ${profileReasons.join("; ")}`,
-    );
+    clog(console.log, `${LOG_TAG} Profile flags: ${profileReasons.join("; ")}`);
   }
 
   if (highestAction && highestAction.action) {
     clog(
       console.log,
-      `[src/events/messageCreate.js] Executing sanction — action: ${highestAction.action}, tier: ${highestAction.tier}`,
+      `${LOG_TAG} Executing sanction — action: ${highestAction.action}, tier: ${highestAction.tier}`,
     );
     recordSpike(guildId);
     await executeSanction(message, highestAction, db, guildConfig, flagReasons);
   } else {
     clog(
       console.log,
-      `[src/events/messageCreate.js] No sanction triggered — highestAction: ${highestAction ? JSON.stringify(highestAction) : "null"}`,
+      `${LOG_TAG} No sanction triggered — highestAction: ${highestAction ? JSON.stringify(highestAction) : "null"}`,
     );
   }
 
   if (flagReasons.length > 0) {
-    enqueue("flag", `<@${userId}> flagged — ${flagReasons.join("; ")}`);
-    clog(
-      console.log,
-      `[src/events/messageCreate.js] Enqueued flag for ${userId}: ${flagReasons.join("; ")}`,
+    enqueue(
+      "flag",
+      message.guild.id,
+      t(lang, "reply.flag.enqueue", { userId, reasons: flagReasons.join("; ") }),
     );
+    clog(console.log, `${LOG_TAG} Enqueued flag for ${userId}: ${flagReasons.join("; ")}`);
   }
 }
 
@@ -224,226 +205,174 @@ export default async function handleMessageCreate(message) {
  * @param {object} guildConfig
  * @param {string[]} flagReasons
  */
-async function executeSanction(
-  message,
-  threshold,
-  db,
-  guildConfig,
-  flagReasons,
-) {
+async function executeSanction(message, threshold, db, guildConfig, flagReasons) {
   const { action, tier } = threshold;
   const userId = message.author.id;
+  const lang = getGuildLanguage(db, message.guildId);
 
   clog(
     console.log,
-    `[src/events/messageCreate.js] executeSanction — action: ${action}, tier: ${tier}, user: ${userId}, reasons: [${flagReasons.join(", ")}]`,
+    `${LOG_TAG} executeSanction — action: ${action}, tier: ${tier}, user: ${userId}, reasons: [${flagReasons.join(", ")}]`,
   );
 
   const member = message.member;
   if (!member) {
-    clog(
-      console.log,
-      `[src/events/messageCreate.js]   Abort: member object is null`,
-    );
+    clog(console.log, `${LOG_TAG} Abort: member object is null`);
     return;
   }
 
   if (member.moderatable === false) {
     clog(
       console.log,
-      `[src/events/messageCreate.js]   Abort: ${userId} is not moderatable (role hierarchy prevents action)`,
+      `${LOG_TAG} Abort: ${userId} is not moderatable (role hierarchy prevents action)`,
     );
     return;
   }
 
-  const tierRow = db
-    .prepare(
-      "SELECT message_delete_seconds FROM ThresholdActions WHERE guild_id = ? AND pressure_tier = ?",
-    )
-    .get(message.guildId, tier);
+  const tierRow = cachedGet(
+    db,
+    "SELECT message_delete_seconds FROM ThresholdActions WHERE guild_id = ? AND pressure_tier = ?",
+    message.guildId,
+    tier,
+  );
 
   const deleteSeconds = tierRow?.message_delete_seconds ?? 120;
-  clog(
-    console.log,
-    `[src/events/messageCreate.js]   deleteSeconds: ${deleteSeconds}`,
-  );
+  clog(console.log, `${LOG_TAG} deleteSeconds: ${deleteSeconds}`);
 
   if (!acquireMutex(userId)) {
     clog(
       console.log,
-      `[src/events/messageCreate.js]   Mutex held for ${userId}, skipping — another sanction already in progress`,
+      `${LOG_TAG} Mutex held for ${userId}, skipping — another sanction already in progress`,
     );
     return;
   }
-  clog(
-    console.log,
-    `[src/events/messageCreate.js]   Mutex acquired for ${userId}`,
-  );
+  clog(console.log, `${LOG_TAG} Mutex acquired for ${userId}`);
 
   try {
-    clog(
-      console.log,
-      `[src/events/messageCreate.js]   Deleting triggering message ${message.id}`,
-    );
+    clog(console.log, `${LOG_TAG} Deleting triggering message ${message.id}`);
     await safeExecute(() => message.delete());
 
     const reasonText =
-      flagReasons.length > 0
-        ? flagReasons.join("; ")
-        : "you triggered the moderation system";
+      flagReasons.length > 0 ? flagReasons.join("; ") : t(lang, "sanction.defaultReason");
 
     switch (action) {
       case "warn": {
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   Executing WARN for ${userId}`,
-        );
+        clog(console.log, `${LOG_TAG} Executing WARN for ${userId}`);
         await safeExecute(() =>
           member
             .send(
-              `⚠️ **Warning** in **${message.guild.name}**\nReason: ${reasonText}`,
+              t(lang, "sanction.warn.dm", { guildName: message.guild.name, reason: reasonText }),
             )
             .catch(() =>
-              clog(
-                console.log,
-                `[src/events/messageCreate.js]   Could not DM ${userId} — DMs likely disabled`,
-              ),
+              clog(console.log, `${LOG_TAG} Could not DM ${userId} — DMs likely disabled`),
             ),
         );
         await safeExecute(() =>
           sendTimedNotice(
             message,
-            `⚠️ Warning issued (Tier ${tier}) — auto-deletes <t:${Math.floor((Date.now() + deleteSeconds * 1000) / 1000)}:R>`,
+            t(lang, "sanction.notice.warn", {
+              tier,
+              timestamp: Math.floor((Date.now() + deleteSeconds * 1000) / 1000),
+            }),
             deleteSeconds,
           ),
         );
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   WARN complete for ${userId}`,
-        );
+        clog(console.log, `${LOG_TAG} WARN complete for ${userId}`);
         break;
       }
 
       case "mute": {
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   Executing MUTE for ${userId} — timeout: 10 minutes`,
-        );
+        clog(console.log, `${LOG_TAG} Executing MUTE for ${userId} — timeout: 10 minutes`);
         await safeExecute(() =>
           member
             .send(
-              `🔇 **Muted** in **${message.guild.name}**\nReason: ${reasonText}\nDuration: 10 minutes from now`,
+              t(lang, "sanction.mute.dm", { guildName: message.guild.name, reason: reasonText }),
             )
             .catch(() =>
-              clog(
-                console.log,
-                `[src/events/messageCreate.js]   Could not DM ${userId} — DMs likely disabled`,
-              ),
+              clog(console.log, `${LOG_TAG} Could not DM ${userId} — DMs likely disabled`),
             ),
         );
         await safeExecute(() =>
-          member.timeout(60_000 * 10, `EXIA auto-moderation Tier ${tier}`),
+          member.timeout(60_000 * 10, t(lang, "sanction.auditReason", { tier })),
         );
         await safeExecute(() =>
           sendTimedNotice(
             message,
-            `🔇 Muted for 10 minutes (Tier ${tier}) — auto-deletes <t:${Math.floor((Date.now() + deleteSeconds * 1000) / 1000)}:R>`,
+            t(lang, "sanction.notice.mute", {
+              tier,
+              timestamp: Math.floor((Date.now() + deleteSeconds * 1000) / 1000),
+            }),
             deleteSeconds,
           ),
         );
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   MUTE complete for ${userId}`,
-        );
+        clog(console.log, `${LOG_TAG} MUTE complete for ${userId}`);
         break;
       }
 
       case "kick": {
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   Executing KICK for ${userId}`,
-        );
-        const rejoinLink =
-          guildConfig.rejoin_link || "Contact an admin for a rejoin link";
+        clog(console.log, `${LOG_TAG} Executing KICK for ${userId}`);
+        const rejoinLink = guildConfig.rejoin_link || t(lang, "sanction.fallback.rejoinLink");
         await safeExecute(() =>
           member
             .send(
-              `You have been kicked from **${message.guild.name}**.\nReason: ${reasonText}\nRejoin: ${rejoinLink}`,
+              t(lang, "sanction.kick.dm", {
+                guildName: message.guild.name,
+                reason: reasonText,
+                rejoinLink,
+              }),
             )
             .catch(() =>
-              clog(
-                console.log,
-                `[src/events/messageCreate.js]   Could not DM ${userId} — DMs likely disabled`,
-              ),
+              clog(console.log, `${LOG_TAG} Could not DM ${userId} — DMs likely disabled`),
             ),
         );
-        await safeExecute(() =>
-          member.kick(`EXIA auto-moderation Tier ${tier}`),
-        );
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   KICK complete for ${userId}`,
-        );
+        await safeExecute(() => member.kick(t(lang, "sanction.auditReason", { tier })));
+        clog(console.log, `${LOG_TAG} KICK complete for ${userId}`);
         break;
       }
 
       case "ban": {
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   Executing BAN for ${userId}`,
-        );
-        const appealContact =
-          guildConfig.appeal_link || "Add an admin to appeal";
+        clog(console.log, `${LOG_TAG} Executing BAN for ${userId}`);
+        const appealContact = guildConfig.appeal_link || t(lang, "sanction.fallback.appealContact");
         await safeExecute(() =>
           member
             .send(
-              `You have been banned from **${message.guild.name}**.\nReason: ${reasonText}\nTo appeal: ${appealContact}`,
+              t(lang, "sanction.ban.dm", {
+                guildName: message.guild.name,
+                reason: reasonText,
+                appealContact,
+              }),
             )
             .catch(() =>
-              clog(
-                console.log,
-                `[src/events/messageCreate.js]   Could not DM ${userId} — DMs likely disabled`,
-              ),
+              clog(console.log, `${LOG_TAG} Could not DM ${userId} — DMs likely disabled`),
             ),
         );
-        const banDeleteSeconds = Math.min(
-          deleteSeconds > 120 ? deleteSeconds : 86400,
-          604800,
-        );
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   Ban deleteMessageSeconds: ${banDeleteSeconds}`,
-        );
+        const banDeleteSeconds = Math.min(deleteSeconds > 120 ? deleteSeconds : 86400, 604800);
+        clog(console.log, `${LOG_TAG} Ban deleteMessageSeconds: ${banDeleteSeconds}`);
         await safeExecute(() =>
           member.ban({
-            reason: `EXIA auto-moderation Tier ${tier}`,
+            reason: t(lang, "sanction.auditReason", { tier }),
             deleteMessageSeconds: banDeleteSeconds,
           }),
         );
-        clog(
-          console.log,
-          `[src/events/messageCreate.js]   BAN complete for ${userId}`,
-        );
+        clog(console.log, `${LOG_TAG} BAN complete for ${userId}`);
         break;
       }
     }
 
-    enqueue("action", `**${action}** on <@${userId}> — ${reasonText}`);
-    clog(
-      console.log,
-      `[src/events/messageCreate.js] Sanction ${action} on ${userId} completed successfully`,
+    enqueue(
+      "action",
+      message.guild.id,
+      t(lang, "reply.sanction.enqueue", { action, userId, reason: reasonText }),
     );
+    clog(console.log, `${LOG_TAG} Sanction ${action} on ${userId} completed successfully`);
   } catch (err) {
     clog(
       console.error,
-      `[src/events/messageCreate.js] Sanction ${action} on ${userId} FAILED — ${err?.message || err}`,
+      `${LOG_TAG} Sanction ${action} on ${userId} FAILED — ${err?.message || err}`,
     );
   } finally {
     releaseMutex(userId);
-    clog(
-      console.log,
-      `[src/events/messageCreate.js]   Mutex released for ${userId}`,
-    );
+    clog(console.log, `${LOG_TAG} Mutex released for ${userId}`);
   }
 }
 
@@ -456,11 +385,7 @@ async function safeExecute(fn) {
   try {
     return await fn();
   } catch (err) {
-    clog(
-      console.error,
-      `[src/events/messageCreate.js] Action failed:`,
-      err?.message || err,
-    );
+    clog(console.error, `${LOG_TAG} Action failed:`, err?.message || err);
     return null;
   }
 }

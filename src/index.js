@@ -4,23 +4,24 @@ import { initDatabase } from "./core/database.js";
 import { startDecayTimer } from "./core/pressureEngine.js";
 import { startRefillTimer } from "./modules/velocityBucket.js";
 import { startTelemetryFlusher } from "./utils/telemetryQueue.js";
-import { startRaidDetection } from "./modules/raidProtection.js";
+import { startRaidDetection, setClient } from "./modules/raidProtection.js";
 import { configCommand } from "./commands/configuration.js";
 import { actionsCommand } from "./commands/appeals.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { raidCommand } from "./commands/raid.js";
 import { debugCommand } from "./commands/debug.js";
+import { languageCommand } from "./commands/language.js";
 import handleMessageCreate from "./events/messageCreate.js";
 import handleInteractionCreate from "./events/interactionCreate.js";
 import handleModalSubmit from "./events/modalSubmit.js";
 import handleGuildMemberAdd from "./events/guildMemberAdd.js";
 import { clog } from "./utils/clog.js";
+import { t } from "./core/locale.js";
+
+const LOG_TAG = "[src/index.js]";
 
 const db = initDatabase();
-clog(
-  console.log,
-  "[src/index.js] Database initialized (better-sqlite3 + WAL mode)",
-);
+clog(console.log, `${LOG_TAG} Database initialized (better-sqlite3 + WAL mode)`);
 
 const client = new Client({
   intents: [
@@ -43,87 +44,61 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.once(Events.ClientReady, async (readyClient) => {
-  clog(
-    console.log,
-    `[src/index.js] Logged in as ${readyClient.user.tag} (ID: ${readyClient.user.id})`,
-  );
-  clog(
-    console.log,
-    `[src/index.js] Serving ${readyClient.guilds.cache.size} guild(s)`,
-  );
+  clog(console.log, `${LOG_TAG} Logged in as ${readyClient.user.tag} (ID: ${readyClient.user.id})`);
+  clog(console.log, `${LOG_TAG} Serving ${readyClient.guilds.cache.size} guild(s)`);
 
   try {
-    await readyClient.application.commands.set([
+    const commandsArray = [
       configCommand,
       actionsCommand,
       profilesCommand,
       raidCommand,
       debugCommand,
-    ]);
-    clog(console.log, `[src/index.js] ${5} slash commands registered globally`);
+      languageCommand,
+    ];
+    await readyClient.application.commands.set(commandsArray);
+    clog(console.log, `${LOG_TAG} ${commandsArray.length} slash commands registered globally`);
   } catch (err) {
-    clog(
-      console.error,
-      `[src/index.js] Failed to register commands: ${err?.message || err}`,
-    );
+    clog(console.error, `${LOG_TAG} Failed to register commands: ${err?.message || err}`);
   }
 
   startDecayTimer();
-  clog(
-    console.log,
-    "[src/index.js] Pressure decay timer started (60s interval, -5p/cycle)",
-  );
+  clog(console.log, `${LOG_TAG} Pressure decay timer started (60s interval, -5p/cycle)`);
   startRefillTimer();
-  clog(
-    console.log,
-    "[src/index.js] Velocity refill timer started (1s interval, +1 token/cycle)",
-  );
+  clog(console.log, `${LOG_TAG} Velocity refill timer started (1s interval, +1 token/cycle)`);
+  setClient(readyClient);
   startRaidDetection();
-  clog(
-    console.log,
-    "[src/index.js] Raid detection timer started (30s interval)",
-  );
+  clog(console.log, `${LOG_TAG} Raid detection timer started (30s interval)`);
   startTelemetryFlusher(readyClient);
-  clog(
-    console.log,
-    "[src/index.js] Telemetry flusher started (5s batch interval)",
-  );
+  clog(console.log, `${LOG_TAG} Telemetry flusher started (5s batch interval)`);
 
-  autoRefresh(readyClient).catch((err) =>
-    clog(
-      console.error,
-      `[src/index.js] Auto-refresh error: ${err?.message || err}`,
-    ),
-  );
+  autoRefresh(readyClient);
 
-  clog(
-    console.log,
-    `[src/index.js] ${readyClient.user.tag} is ready — all systems operational`,
-  );
+  clog(console.log, `${LOG_TAG} ${readyClient.user.tag} is ready — all systems operational`);
 });
 
 process.on("SIGINT", async () => {
-  clog(console.log, "[src/index.js] Shutting down...");
+  clog(console.log, `${LOG_TAG} Shutting down...`);
   client.destroy();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-  clog(console.log, "[src/index.js] Shutting down...");
+  clog(console.log, `${LOG_TAG} Shutting down...`);
   client.destroy();
   process.exit(0);
 });
 
 process.on("unhandledRejection", (err) => {
-  clog(console.error, "[src/index.js] Unhandled rejection:", err);
+  clog(console.error, `${LOG_TAG} Unhandled rejection:`, err);
 });
 
 client.on(Events.Error, (err) => {
-  clog(console.error, "[src/index.js] Client error:", err);
+  clog(console.error, `${LOG_TAG} Client error:`, err);
 });
 
 client.login(token).catch((err) => {
-  clog(console.error, "[src/index.js] Login failed:", err);
+  clog(console.error, `${LOG_TAG} Login failed:`, err);
   process.exit(1);
 });
 
@@ -132,49 +107,64 @@ client.login(token).catch((err) => {
  * Uses only already-cached GuildMember objects. No API calls nor rate limits.
  * @param {import('discord.js').Client} client
  */
-async function autoRefresh(client) {
-  const { auditProfile } = await import("./modules/userProfile.js");
-  const { enqueue } = await import("./utils/telemetryQueue.js");
-  const db = (await import("./core/database.js")).getDatabase();
+function autoRefresh(client) {
+  const guilds = [...client.guilds.cache.values()];
+  let idx = 0;
 
-  for (const [, guild] of client.guilds.cache) {
-    const mod = db
-      .prepare(
-        "SELECT is_enabled FROM ModuleWeights WHERE guild_id = ? AND module_name = 'user_profile'",
-      )
-      .get(guild.id);
+  function processNext() {
+    if (idx >= guilds.length) {
+      clog(console.log, `${LOG_TAG} Auto-refresh complete — ${guilds.length} guilds scanned`);
+      return;
+    }
 
-    const profileEnabled = mod && mod.is_enabled === 1;
+    const guild = guilds[idx++];
+    setImmediate(async () => {
+      try {
+        const { auditProfile } = await import("./modules/userProfile.js");
+        const { enqueue } = await import("./utils/telemetryQueue.js");
+        const { getGuildLanguage } = await import("./core/locale.js");
+        const { getDatabase } = await import("./core/database.js");
+        const db = getDatabase();
+        const { cachedGet } = await import("./utils/queryCache.js");
 
-    let flagged = 0;
-
-    for (const [, member] of guild.members.cache) {
-      if (member.user.bot) {
-        continue;
-      }
-
-      const profile = auditProfile(member);
-      if (profile.reasons.length > 0 && profileEnabled) {
-        flagged++;
-        enqueue(
-          "flag",
-          `[AUTO-REFRESH] <@${member.id}> — ${profile.reasons.join(", ")} (${profile.multiplier}x)`,
+        const lang = getGuildLanguage(db, guild.id);
+        const mod = cachedGet(
+          db,
+          "SELECT is_enabled FROM ModuleWeights WHERE guild_id = ? AND module_name = 'user_profile'",
+          guild.id,
         );
-      }
-    }
 
-    if (flagged > 0) {
-      clog(
-        console.log,
-        `[src/index.js] Auto-refresh: guild ${guild.id} (${guild.name}) scanned ${guild.members.cache.size} members, flagged ${flagged}`,
-      );
-    } else {
-      clog(
-        console.log,
-        `[src/index.js] Auto-refresh: guild ${guild.id} (${guild.name}) scanned ${guild.members.cache.size} members, none flagged`,
-      );
-    }
+        const profileEnabled = mod && mod.is_enabled === 1;
+        let flagged = 0;
+
+        for (const [, member] of guild.members.cache) {
+          if (member.user.bot) {
+            continue;
+          }
+          const profile = auditProfile(member, lang);
+          if (profile.reasons.length > 0 && profileEnabled) {
+            flagged++;
+            enqueue(
+              "flag",
+              guild.id,
+              `${LOG_TAG} ${t(lang, "telemetry.flag.refresh", { user: `<@${member.id}>`, userId: member.id, reasons: profile.reasons.join(", "), multiplier: profile.multiplier })}`,
+            );
+          }
+        }
+
+        clog(
+          console.log,
+          `${LOG_TAG} Auto-refresh: guild ${guild.id} (${guild.name}) scanned ${guild.members.cache.size} members, flagged ${flagged}`,
+        );
+      } catch (err) {
+        clog(console.error, `${LOG_TAG} Auto-refresh error for guild ${guild.id}:`, err);
+      }
+
+      processNext();
+    });
   }
+
+  processNext();
 }
 
-export { client, db };
+export { client };

@@ -1,62 +1,176 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { t } from "../core/locale.js";
 
-/**
- * /config command — all subcommand groups and subcommands.
- * @type {import('discord.js').SlashCommandBuilder}
- */
 export const configCommand = new SlashCommandBuilder()
   .setName("config")
-  .setDescription("Configure EXIA moderation settings")
+  .setDescription(t("en", "command.config.description"))
+  .setDescriptionLocalizations({ ja: t("ja", "command.config.description") })
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 
-  // /config modules toggle
   .addSubcommandGroup((group) =>
     group
       .setName("modules")
-      .setDescription("Manage threat detection modules")
+      .setDescription(t("en", "command.config.modules.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.config.modules.description") })
       .addSubcommand((sub) =>
         sub
           .setName("toggle")
-          .setDescription("Enable or disable a module")
+          .setDescription(t("en", "command.config.modules.toggle.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.modules.toggle.description") })
           .addStringOption((opt) =>
             opt
               .setName("target_module")
-              .setDescription("Module to toggle")
+              .setDescription(
+                t("en", "command.config.modules.toggle.options.target_module.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.modules.toggle.options.target_module.description"),
+              })
               .setRequired(true)
               .addChoices(
-                { name: "User Profile", value: "user_profile" },
-                { name: "Velocity", value: "velocity" },
-                { name: "Honeypot Trap", value: "honeypot" },
-                { name: "Regex", value: "regex" },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.user_profile",
+                  ),
+                  value: "user_profile",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.user_profile",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.velocity",
+                  ),
+                  value: "velocity",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.velocity",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.honeypot",
+                  ),
+                  value: "honeypot",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.honeypot",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.regex",
+                  ),
+                  value: "regex",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.regex",
+                    ),
+                  },
+                },
               ),
           )
           .addBooleanOption((opt) =>
             opt
               .setName("active_state")
-              .setDescription("Enable or disable")
+              .setDescription(
+                t("en", "command.config.modules.toggle.options.active_state.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.modules.toggle.options.active_state.description"),
+              })
               .setRequired(true),
           ),
       )
       .addSubcommand((sub) =>
         sub
           .setName("weight")
-          .setDescription("Set a module's pressure weight")
+          .setDescription(t("en", "command.config.modules.weight.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.modules.weight.description") })
           .addStringOption((opt) =>
             opt
               .setName("target_module")
-              .setDescription("Module to configure")
+              .setDescription(
+                t("en", "command.config.modules.weight.options.target_module.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.modules.weight.options.target_module.description"),
+              })
               .setRequired(true)
               .addChoices(
-                { name: "User Profile", value: "user_profile" },
-                { name: "Velocity", value: "velocity" },
-                { name: "Honeypot Trap", value: "honeypot" },
-                { name: "Regex", value: "regex" },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.user_profile",
+                  ),
+                  value: "user_profile",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.user_profile",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.velocity",
+                  ),
+                  value: "velocity",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.velocity",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.honeypot",
+                  ),
+                  value: "honeypot",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.honeypot",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.regex",
+                  ),
+                  value: "regex",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.regex",
+                    ),
+                  },
+                },
               ),
           )
           .addIntegerOption((opt) =>
             opt
               .setName("value")
-              .setDescription("Pressure weight (0-9999)")
+              .setDescription(t("en", "command.config.modules.weight.options.value.description"))
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.modules.weight.options.value.description"),
+              })
               .setRequired(true)
               .setMinValue(0)
               .setMaxValue(9999),
@@ -65,53 +179,175 @@ export const configCommand = new SlashCommandBuilder()
       .addSubcommand((sub) =>
         sub
           .setName("critical")
-          .setDescription("Toggle a module's critical (instant ban) flag")
+          .setDescription(t("en", "command.config.modules.critical.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.config.modules.critical.description"),
+          })
           .addStringOption((opt) =>
             opt
               .setName("target_module")
-              .setDescription("Module to configure")
+              .setDescription(
+                t("en", "command.config.modules.critical.options.target_module.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.modules.critical.options.target_module.description"),
+              })
               .setRequired(true)
               .addChoices(
-                { name: "User Profile", value: "user_profile" },
-                { name: "Velocity", value: "velocity" },
-                { name: "Honeypot Trap", value: "honeypot" },
-                { name: "Regex", value: "regex" },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.user_profile",
+                  ),
+                  value: "user_profile",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.user_profile",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.velocity",
+                  ),
+                  value: "velocity",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.velocity",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.honeypot",
+                  ),
+                  value: "honeypot",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.honeypot",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.regex",
+                  ),
+                  value: "regex",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.regex",
+                    ),
+                  },
+                },
               ),
           )
           .addBooleanOption((opt) =>
             opt
               .setName("is_critical")
-              .setDescription("Critical? (instant ban on trigger)")
+              .setDescription(
+                t("en", "command.config.modules.critical.options.is_critical.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.modules.critical.options.is_critical.description"),
+              })
               .setRequired(true),
           ),
       ),
   )
 
-  // /config thresholds assign
   .addSubcommandGroup((group) =>
     group
       .setName("thresholds")
-      .setDescription("Configure pressure thresholds")
+      .setDescription(t("en", "command.config.thresholds.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.config.thresholds.description") })
       .addSubcommand((sub) =>
         sub
           .setName("assign")
-          .setDescription("Assign an action to a pressure tier")
+          .setDescription(t("en", "command.config.thresholds.assign.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.config.thresholds.assign.description"),
+          })
           .addIntegerOption((opt) =>
             opt
               .setName("action_tier")
-              .setDescription("Tier to configure")
+              .setDescription(
+                t("en", "command.config.thresholds.assign.options.action_tier.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.thresholds.assign.options.action_tier.description"),
+              })
               .setRequired(true)
               .addChoices(
-                { name: "Tier 1 — Warn", value: 1 },
-                { name: "Tier 2 — Mute", value: 2 },
-                { name: "Tier 3 — Kick", value: 3 },
-                { name: "Tier 4 — Ban", value: 4 },
+                {
+                  name: t(
+                    "en",
+                    "command.config.thresholds.assign.options.action_tier.choices.tier1",
+                  ),
+                  value: 1,
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.thresholds.assign.options.action_tier.choices.tier1",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.thresholds.assign.options.action_tier.choices.tier2",
+                  ),
+                  value: 2,
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.thresholds.assign.options.action_tier.choices.tier2",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.thresholds.assign.options.action_tier.choices.tier3",
+                  ),
+                  value: 3,
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.thresholds.assign.options.action_tier.choices.tier3",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.thresholds.assign.options.action_tier.choices.tier4",
+                  ),
+                  value: 4,
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.thresholds.assign.options.action_tier.choices.tier4",
+                    ),
+                  },
+                },
               ),
           )
           .addIntegerOption((opt) =>
             opt
               .setName("pressure_limit")
-              .setDescription("Pressure points required")
+              .setDescription(
+                t("en", "command.config.thresholds.assign.options.pressure_limit.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.thresholds.assign.options.pressure_limit.description"),
+              })
               .setRequired(true)
               .setMinValue(1)
               .setMaxValue(9999),
@@ -120,8 +356,11 @@ export const configCommand = new SlashCommandBuilder()
             opt
               .setName("delete_after")
               .setDescription(
-                "Auto-delete notice after N seconds (default 120)",
+                t("en", "command.config.thresholds.assign.options.delete_after.description"),
               )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.thresholds.assign.options.delete_after.description"),
+              })
               .setRequired(false)
               .setMinValue(0)
               .setMaxValue(3600),
@@ -129,27 +368,35 @@ export const configCommand = new SlashCommandBuilder()
       ),
   )
 
-  // /config regex create, list, edit, delete
   .addSubcommandGroup((group) =>
     group
       .setName("regex")
-      .setDescription("Manage regex rules")
+      .setDescription(t("en", "command.config.regex.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.config.regex.description") })
       .addSubcommand((sub) =>
         sub
           .setName("create")
-          .setDescription("Create a regex rule (opens modal)"),
+          .setDescription(t("en", "command.config.regex.create.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.regex.create.description") }),
       )
       .addSubcommand((sub) =>
-        sub.setName("list").setDescription("List all regex rules"),
+        sub
+          .setName("list")
+          .setDescription(t("en", "command.config.regex.list.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.regex.list.description") }),
       )
       .addSubcommand((sub) =>
         sub
           .setName("edit")
-          .setDescription("Edit a regex rule (opens modal)")
+          .setDescription(t("en", "command.config.regex.edit.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.regex.edit.description") })
           .addStringOption((opt) =>
             opt
               .setName("identifier")
-              .setDescription("Rule identifier to edit")
+              .setDescription(t("en", "command.config.regex.edit.options.identifier.description"))
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.regex.edit.options.identifier.description"),
+              })
               .setRequired(true)
               .setAutocomplete(true),
           ),
@@ -157,54 +404,72 @@ export const configCommand = new SlashCommandBuilder()
       .addSubcommand((sub) =>
         sub
           .setName("delete")
-          .setDescription("Delete a regex rule")
+          .setDescription(t("en", "command.config.regex.delete.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.regex.delete.description") })
           .addStringOption((opt) =>
             opt
               .setName("identifier")
-              .setDescription("Rule identifier to delete")
+              .setDescription(t("en", "command.config.regex.delete.options.identifier.description"))
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.regex.delete.options.identifier.description"),
+              })
               .setRequired(true)
               .setAutocomplete(true),
           ),
       ),
   )
 
-  // /config honeypot set
   .addSubcommandGroup((group) =>
     group
       .setName("honeypot")
-      .setDescription("Configure honeypot channel")
+      .setDescription(t("en", "command.config.honeypot.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.config.honeypot.description") })
       .addSubcommand((sub) =>
         sub
           .setName("set")
-          .setDescription("Set the honeypot trap channel")
+          .setDescription(t("en", "command.config.honeypot.set.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.honeypot.set.description") })
           .addChannelOption((opt) =>
             opt
               .setName("target_channel")
-              .setDescription("Honeypot channel")
+              .setDescription(
+                t("en", "command.config.honeypot.set.options.target_channel.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.honeypot.set.options.target_channel.description"),
+              })
               .setRequired(true),
           ),
       ),
   )
 
-  // /config logchannel set
   .addSubcommandGroup((group) =>
     group
       .setName("logchannel")
-      .setDescription("Configure telemetry log channel")
+      .setDescription(t("en", "command.config.logchannel.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.config.logchannel.description") })
       .addSubcommand((sub) =>
         sub
           .setName("set")
-          .setDescription("Set the log channel for telemetry")
+          .setDescription(t("en", "command.config.logchannel.set.description"))
+          .setDescriptionLocalizations({ ja: t("ja", "command.config.logchannel.set.description") })
           .addChannelOption((opt) =>
             opt
               .setName("target_channel")
-              .setDescription("Log channel")
+              .setDescription(
+                t("en", "command.config.logchannel.set.options.target_channel.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.logchannel.set.options.target_channel.description"),
+              })
               .setRequired(true),
           ),
       ),
   )
 
-  // /config view
   .addSubcommand((sub) =>
-    sub.setName("view").setDescription("View current configuration"),
+    sub
+      .setName("view")
+      .setDescription(t("en", "command.config.view.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.config.view.description") }),
   );

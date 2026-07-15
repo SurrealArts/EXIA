@@ -4,6 +4,8 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { clog } from "../utils/clog.js";
 
+const LOG_TAG = "[src/core/database.js]";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, "../../data");
 const dbPath = path.join(DATA_DIR, "exia.db");
@@ -25,7 +27,7 @@ export function initDatabase() {
   createTables();
   runMigrations();
 
-  clog(console.log, "[src/core/database.js] Database initialized at " + dbPath);
+  clog(console.log, `${LOG_TAG} Database initialized at ` + dbPath);
   return db;
 }
 
@@ -102,18 +104,13 @@ function runMigrations() {
     .map((c) => c.name);
 
   if (!gcColumns.includes("active_profile")) {
-    db.exec(
-      "ALTER TABLE GuildConfiguration ADD COLUMN active_profile TEXT DEFAULT 'Standard'",
-    );
+    db.exec("ALTER TABLE GuildConfiguration ADD COLUMN active_profile TEXT DEFAULT 'Standard'");
     clog(
       console.log,
-      "[src/core/database.js] Migration (v1): added active_profile column to GuildConfiguration",
+      `${LOG_TAG} Migration (v1): added active_profile column to GuildConfiguration`,
     );
   } else {
-    clog(
-      console.log,
-      "[src/core/database.js] Migration (v1): active_profile column already exists, skipping",
-    );
+    clog(console.log, `${LOG_TAG} Migration (v1): active_profile column already exists, skipping`);
   }
 
   const taColumns = db
@@ -122,18 +119,17 @@ function runMigrations() {
     .map((c) => c.name);
 
   if (!taColumns.includes("pressure")) {
-    db.exec(
-      "ALTER TABLE ThresholdActions ADD COLUMN pressure INTEGER NOT NULL DEFAULT 25",
-    );
-    clog(
-      console.log,
-      "[src/core/database.js] Migration (v2): added pressure column to ThresholdActions",
-    );
+    db.exec("ALTER TABLE ThresholdActions ADD COLUMN pressure INTEGER NOT NULL DEFAULT 25");
+    clog(console.log, `${LOG_TAG} Migration (v2): added pressure column to ThresholdActions`);
   } else {
-    clog(
-      console.log,
-      "[src/core/database.js] Migration (v2): pressure column already exists, skipping",
-    );
+    clog(console.log, `${LOG_TAG} Migration (v2): pressure column already exists, skipping`);
+  }
+
+  if (!gcColumns.includes("language")) {
+    db.exec("ALTER TABLE GuildConfiguration ADD COLUMN language TEXT DEFAULT 'en'");
+    clog(console.log, `${LOG_TAG} Migration (v4): added language column to GuildConfiguration`);
+  } else {
+    clog(console.log, `${LOG_TAG} Migration (v4): language column already exists, skipping`);
   }
 
   const profiles = db
@@ -147,11 +143,7 @@ function runMigrations() {
       const data = JSON.parse(row.profile_data);
       let changed = false;
 
-      if (
-        data.modules &&
-        data.modules.length > 0 &&
-        data.modules[0].name !== undefined
-      ) {
+      if (data.modules && data.modules.length > 0 && data.modules[0].name !== undefined) {
         data.modules = data.modules.map((m) => ({
           module_name: m.name,
           weight: m.weight,
@@ -161,11 +153,7 @@ function runMigrations() {
         changed = true;
       }
 
-      if (
-        data.thresholds &&
-        data.thresholds.length > 0 &&
-        data.thresholds[0].tier !== undefined
-      ) {
+      if (data.thresholds && data.thresholds.length > 0 && data.thresholds[0].tier !== undefined) {
         data.thresholds = data.thresholds.map((t) => ({
           pressure_tier: t.tier,
           action: t.action,
@@ -175,10 +163,7 @@ function runMigrations() {
         changed = true;
       }
 
-      if (
-        !data.regex ||
-        !data.regex.some((r) => r.rule_identifier === "Anti-invites")
-      ) {
+      if (!data.regex || !data.regex.some((r) => r.rule_identifier === "Anti-invites")) {
         const antiInvites = {
           rule_identifier: "Anti-invites",
           pattern:
@@ -198,22 +183,19 @@ function runMigrations() {
         ).run(JSON.stringify(data), row.guild_id, row.profile_name);
         clog(
           console.log,
-          `[src/core/database.js] Migration (v3): migrated Standard profile JSON for guild ${row.guild_id} — normalized keys, added Anti-invites regex, removed guildConfig`,
+          `${LOG_TAG} Migration (v3): migrated Standard profile JSON for guild ${row.guild_id} — normalized keys, added Anti-invites regex, removed guildConfig`,
         );
       }
     } catch (e) {
       clog(
         console.warn,
-        `[src/core/database.js] Migration (v3): skipped malformed Standard profile JSON for guild ${row.guild_id}: ${e.message}`,
+        `${LOG_TAG} Migration (v3): skipped malformed Standard profile JSON for guild ${row.guild_id}: ${e.message}`,
       );
     }
   }
 
   if (profiles.length === 0) {
-    clog(
-      console.log,
-      "[src/core/database.js] Migration (v3): no Standard profiles to migrate",
-    );
+    clog(console.log, `${LOG_TAG} Migration (v3): no Standard profiles to migrate`);
   }
 }
 
@@ -289,7 +271,7 @@ export function ensureStandardProfile(guildId) {
 
   clog(
     console.log,
-    `[src/core/database.js] Standard profile seeded for guild ${guildId} — 4 modules, 4 thresholds, 1 regex rule (Anti-invites)`,
+    `${LOG_TAG} Standard profile seeded for guild ${guildId} — 4 modules, 4 thresholds, 1 regex rule (Anti-invites)`,
   );
 }
 
@@ -354,13 +336,7 @@ export function applyStandardProfile(guildId) {
       },
     ];
     for (const t of thresholds) {
-      insThr.run(
-        guildId,
-        t.pressure_tier,
-        t.action,
-        t.message_delete_seconds,
-        t.pressure,
-      );
+      insThr.run(guildId, t.pressure_tier, t.action, t.message_delete_seconds, t.pressure);
     }
 
     db.prepare("DELETE FROM RegexRules WHERE guild_id = ?").run(guildId);
@@ -380,7 +356,7 @@ export function applyStandardProfile(guildId) {
   ensureStandardProfile(guildId);
   clog(
     console.log,
-    `[src/core/database.js] Standard profile applied for guild ${guildId} — modules/thresholds/regex written to active tables`,
+    `${LOG_TAG} Standard profile applied for guild ${guildId} — modules/thresholds/regex written to active tables`,
   );
 }
 

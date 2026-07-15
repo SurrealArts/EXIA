@@ -1,21 +1,26 @@
 import { MessageFlags } from "discord.js";
 import { clog } from "../utils/clog.js";
+import { t, resolveInteractionLang } from "../core/locale.js";
+import { invalidateCache } from "../utils/queryCache.js";
+
+const LOG_TAG = "[src/events/modalSubmit.js]";
 
 /**
  * @param {import('discord.js').ModalSubmitInteraction} interaction
  * @param {import('better-sqlite3').Database} db
  */
 export default async function handleModalSubmit(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
+
   if (interaction.customId === "regex_create_modal") {
-    const ruleIdentifier =
-      interaction.fields.getTextInputValue("rule_identifier");
+    const ruleIdentifier = interaction.fields.getTextInputValue("rule_identifier");
     const pattern = interaction.fields.getTextInputValue("pattern");
     const weightRaw = interaction.fields.getTextInputValue("threat_weight");
     const threatWeight = weightRaw ? parseInt(weightRaw, 10) : 10;
 
     if (!ruleIdentifier || !pattern) {
       await interaction.reply({
-        content: "Rule identifier and pattern are required.",
+        content: t(lang, "reply.modal.regex.create.required"),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -25,7 +30,7 @@ export default async function handleModalSubmit(interaction, db) {
       new RegExp(pattern);
     } catch (err) {
       await interaction.reply({
-        content: `Invalid regex pattern: ${err.message}`,
+        content: t(lang, "reply.modal.regex.invalidPattern", { errorMessage: err.message }),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -36,31 +41,27 @@ export default async function handleModalSubmit(interaction, db) {
        VALUES (?, ?, ?, ?)
        ON CONFLICT(guild_id, rule_identifier)
        DO UPDATE SET pattern = ?, threat_weight = ?`,
-    ).run(
-      interaction.guildId,
-      ruleIdentifier,
-      pattern,
-      threatWeight,
-      pattern,
-      threatWeight,
-    );
+    ).run(interaction.guildId, ruleIdentifier, pattern, threatWeight, pattern, threatWeight);
+
+    invalidateCache();
 
     await interaction.reply({
-      content: `Regex rule **${ruleIdentifier}** created with weight ${threatWeight}.`,
+      content: t(lang, "reply.modal.regex.create.success", {
+        identifier: ruleIdentifier,
+        weight: threatWeight,
+      }),
       flags: MessageFlags.Ephemeral,
     });
 
     clog(
       console.log,
-      `[src/events/modalSubmit.js] Regex rule "${ruleIdentifier}" created by <@${interaction.user.id}> — pattern: "${pattern.slice(0, 80)}", weight: ${threatWeight}`,
+      `${LOG_TAG} Regex rule "${ruleIdentifier}" created by <@${interaction.user.id}> — pattern: "${pattern.slice(0, 80)}", weight: ${threatWeight}`,
     );
     return;
   }
 
   if (interaction.customId.startsWith("regex_edit_modal_")) {
-    const ruleIdentifier = interaction.customId.slice(
-      "regex_edit_modal_".length,
-    );
+    const ruleIdentifier = interaction.customId.slice("regex_edit_modal_".length);
     const pattern = interaction.fields.getTextInputValue("pattern");
     const weightRaw = interaction.fields.getTextInputValue("threat_weight");
     const criticalRaw = interaction.fields.getTextInputValue("is_critical");
@@ -69,7 +70,7 @@ export default async function handleModalSubmit(interaction, db) {
 
     if (!pattern) {
       await interaction.reply({
-        content: "Pattern is required.",
+        content: t(lang, "reply.modal.regex.edit.required"),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -79,7 +80,7 @@ export default async function handleModalSubmit(interaction, db) {
       new RegExp(pattern);
     } catch (err) {
       await interaction.reply({
-        content: `Invalid regex pattern: ${err.message}`,
+        content: t(lang, "reply.modal.regex.invalidPattern", { errorMessage: err.message }),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -87,22 +88,24 @@ export default async function handleModalSubmit(interaction, db) {
 
     db.prepare(
       `UPDATE RegexRules SET pattern = ?, threat_weight = ?, is_critical = ? WHERE guild_id = ? AND rule_identifier = ?`,
-    ).run(
-      pattern,
-      threatWeight,
-      isCritical,
-      interaction.guildId,
-      ruleIdentifier,
-    );
+    ).run(pattern, threatWeight, isCritical, interaction.guildId, ruleIdentifier);
+
+    invalidateCache();
+
+    const criticalStatus = isCritical === 1 ? t(lang, "status.yes") : t(lang, "status.no");
 
     await interaction.reply({
-      content: `Regex rule **${ruleIdentifier}** updated (weight: ${threatWeight}, critical: ${isCritical === 1 ? "Yes" : "No"}).`,
+      content: t(lang, "reply.modal.regex.edit.success", {
+        identifier: ruleIdentifier,
+        weight: threatWeight,
+        critical: criticalStatus,
+      }),
       flags: MessageFlags.Ephemeral,
     });
 
     clog(
       console.log,
-      `[src/events/modalSubmit.js] Regex rule "${ruleIdentifier}" updated by <@${interaction.user.id}> — pattern: "${pattern.slice(0, 80)}", weight: ${threatWeight}, critical: ${isCritical === 1 ? "Yes" : "No"}`,
+      `${LOG_TAG} Regex rule "${ruleIdentifier}" updated by <@${interaction.user.id}> — pattern: "${pattern.slice(0, 80)}", weight: ${threatWeight}, critical: ${isCritical === 1 ? "Yes" : "No"}`,
     );
   }
 }

@@ -1,9 +1,12 @@
 import { clog } from "../utils/clog.js";
 
+const LOG_TAG = "[src/core/pressureEngine.js]";
+
 const PRESSURE_DECAY_INTERVAL_MS = 60_000;
 const PRESSURE_DECAY_AMOUNT = 5;
 const FAST_TRACK_PRESSURE = 9999;
 const MAX_PRESSURE = 9999;
+const MAX_PRESSURE_ENTRIES = 10_000;
 
 /**
  * In-memory pressure scores per guild+user, with timestamps for decay.
@@ -48,7 +51,7 @@ export function startDecayTimer() {
         decayed++;
         clog(
           console.log,
-          `[src/core/pressureEngine.js] Decay: ${key} pressure ${before} → ${entry.pressure} (${decay} decay, ${elapsed}ms idle)`,
+          `${LOG_TAG} Decay: ${key} pressure ${before} → ${entry.pressure} (${decay} decay, ${elapsed}ms idle)`,
         );
 
         if (entry.pressure <= 0) {
@@ -56,7 +59,7 @@ export function startDecayTimer() {
           removed++;
           clog(
             console.log,
-            `[src/core/pressureEngine.js] Decay: ${key} pressure reached 0, removed from active scores`,
+            `${LOG_TAG} Decay: ${key} pressure reached 0, removed from active scores`,
           );
         }
       }
@@ -65,7 +68,21 @@ export function startDecayTimer() {
     if (decayed > 0) {
       clog(
         console.log,
-        `[src/core/pressureEngine.js] Decay cycle: ${decayed} entries decayed, ${removed} removed, ${pressureScores.size} active remaining`,
+        `${LOG_TAG} Decay cycle: ${decayed} entries decayed, ${removed} removed, ${pressureScores.size} active remaining`,
+      );
+    }
+
+    if (pressureScores.size > MAX_PRESSURE_ENTRIES) {
+      const sorted = [...pressureScores.entries()].sort(
+        (a, b) => a[1].lastUpdated - b[1].lastUpdated,
+      );
+      const toEvict = sorted.slice(0, pressureScores.size - MAX_PRESSURE_ENTRIES);
+      for (const [key] of toEvict) {
+        pressureScores.delete(key);
+      }
+      clog(
+        console.warn,
+        `${LOG_TAG} Capped pressure entries: evicted ${toEvict.length} oldest, ${pressureScores.size} remaining`,
       );
     }
   }, PRESSURE_DECAY_INTERVAL_MS);
@@ -103,7 +120,7 @@ export function applyPressure(
   if (isCritical) {
     clog(
       console.warn,
-      `[src/core/pressureEngine.js] FAST-TRACK: ${userId} — setting pressure to ${FAST_TRACK_PRESSURE} (action: ban, tier: 4)`,
+      `${LOG_TAG} FAST-TRACK: ${userId} — setting pressure to ${FAST_TRACK_PRESSURE} (action: ban, tier: 4)`,
     );
     pressureScores.set(key, {
       pressure: FAST_TRACK_PRESSURE,
@@ -124,7 +141,7 @@ export function applyPressure(
       entry.lastUpdated = Date.now();
       clog(
         console.log,
-        `[src/core/pressureEngine.js] MUTEXED: ${userId} — stacking ${weight}p: ${before} → ${entry.pressure} (no action — under sanction)`,
+        `${LOG_TAG} MUTEXED: ${userId} — stacking ${weight}p: ${before} → ${entry.pressure} (no action — under sanction)`,
       );
     } else {
       pressureScores.set(key, {
@@ -133,7 +150,7 @@ export function applyPressure(
       });
       clog(
         console.log,
-        `[src/core/pressureEngine.js] MUTEXED: ${userId} — new entry with ${weight}p (no action — under sanction)`,
+        `${LOG_TAG} MUTEXED: ${userId} — new entry with ${weight}p (no action — under sanction)`,
       );
     }
     return {
@@ -149,26 +166,20 @@ export function applyPressure(
     const before = existing.pressure;
     existing.pressure = Math.min(MAX_PRESSURE, existing.pressure + weight);
     existing.lastUpdated = Date.now();
-    clog(
-      console.log,
-      `[src/core/pressureEngine.js] ${userId}: adding ${weight}p — ${before} → ${existing.pressure}`,
-    );
+    clog(console.log, `${LOG_TAG} ${userId}: adding ${weight}p — ${before} → ${existing.pressure}`);
   } else {
     pressureScores.set(key, {
       pressure: Math.min(MAX_PRESSURE, weight),
       lastUpdated: Date.now(),
     });
-    clog(
-      console.log,
-      `[src/core/pressureEngine.js] ${userId}: new pressure entry with ${weight}p`,
-    );
+    clog(console.log, `${LOG_TAG} ${userId}: new pressure entry with ${weight}p`);
   }
 
   const totalPressure = pressureScores.get(key).pressure;
   const threshold = getHighestThreshold(totalPressure, thresholds);
   clog(
     console.log,
-    `[src/core/pressureEngine.js] ${userId}: total=${totalPressure}, threshold=${threshold ? `${threshold.pressure}p → ${threshold.action} (tier ${threshold.tier})` : "none"}`,
+    `${LOG_TAG} ${userId}: total=${totalPressure}, threshold=${threshold ? `${threshold.pressure}p → ${threshold.action} (tier ${threshold.tier})` : "none"}`,
   );
 
   return {

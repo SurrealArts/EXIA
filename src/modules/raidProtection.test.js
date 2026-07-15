@@ -36,6 +36,7 @@ import {
   getRaidStage,
   getRaidState,
   setRaidStage,
+  setClient,
   startRaidDetection,
   resetRaidState,
 } from "./raidProtection.js";
@@ -59,7 +60,22 @@ function makeChannel(id, name, opts = {}) {
     delete: vi.fn().mockResolvedValue(undefined),
     permissionOverwrites: {
       cache: overwrites,
-      edit: vi.fn().mockResolvedValue(undefined),
+      edit: vi.fn((userOrRole, options, overwriteOptions) => {
+        if (options === null || typeof options !== "object") {
+          throw new Error("edit: second arg (permissions) must be an object");
+        }
+        if (
+          overwriteOptions !== undefined &&
+          (typeof overwriteOptions !== "object" ||
+            overwriteOptions === null ||
+            (overwriteOptions.reason !== undefined && typeof overwriteOptions.reason !== "string"))
+        ) {
+          throw new Error(
+            "edit: third arg (overwriteOptions) must be an object with optional string reason",
+          );
+        }
+        return Promise.resolve();
+      }),
     },
   };
 }
@@ -90,9 +106,7 @@ function makeGuild(id = "guild1") {
     name: `Guild ${id}`,
     channels: {
       cache,
-      create: vi
-        .fn()
-        .mockResolvedValue(makeChannel("raid-temp", "raid-temp-channel")),
+      create: vi.fn().mockResolvedValue(makeChannel("raid-temp", "raid-temp-channel")),
     },
     roles: {
       everyone: { id: "everyone_role" },
@@ -192,14 +206,10 @@ describe("setRaidStage — stage transitions", () => {
     expect(getRaidStage("guild1")).toBe(1);
 
     for (const [, ch] of guild.channels.cache) {
-      expect(ch.edit).toHaveBeenCalledWith(
-        expect.objectContaining({ rateLimitPerUser: 1800 }),
-      );
+      expect(ch.edit).toHaveBeenCalledWith(expect.objectContaining({ rateLimitPerUser: 1800 }));
     }
 
-    const row = db
-      .prepare("SELECT backup_json FROM RaidState WHERE guild_id = ?")
-      .get("guild1");
+    const row = db.prepare("SELECT backup_json FROM RaidState WHERE guild_id = ?").get("guild1");
     expect(row).toBeDefined();
     expect(JSON.parse(row.backup_json).length).toBeGreaterThan(0);
   });
@@ -212,9 +222,7 @@ describe("setRaidStage — stage transitions", () => {
 
     expect(getRaidStage("guild1")).toBe(2);
     for (const [, ch] of guild.channels.cache) {
-      expect(ch.edit).toHaveBeenCalledWith(
-        expect.objectContaining({ rateLimitPerUser: 7200 }),
-      );
+      expect(ch.edit).toHaveBeenCalledWith(expect.objectContaining({ rateLimitPerUser: 7200 }));
     }
   });
 
@@ -245,14 +253,10 @@ describe("setRaidStage — stage transitions", () => {
     expect(getRaidStage("guild1")).toBe(0);
 
     for (const [, ch] of guild.channels.cache) {
-      expect(ch.edit).toHaveBeenCalledWith(
-        expect.objectContaining({ rateLimitPerUser: 0 }),
-      );
+      expect(ch.edit).toHaveBeenCalledWith(expect.objectContaining({ rateLimitPerUser: 0 }));
     }
 
-    const row = db
-      .prepare("SELECT * FROM RaidState WHERE guild_id = ?")
-      .get("guild1");
+    const row = db.prepare("SELECT * FROM RaidState WHERE guild_id = ?").get("guild1");
     expect(row).toBeDefined();
     expect(row.stage).toBe(0);
   });
@@ -290,6 +294,10 @@ describe("auto-detection timer", () => {
     db = makeDb();
     mockState.guildCache.set("guild1", guild);
     mockState.setDb(db);
+    setClient({
+      guilds: { cache: mockState.guildCache },
+      channels: { cache: new Map() },
+    });
     startRaidDetection();
   });
 

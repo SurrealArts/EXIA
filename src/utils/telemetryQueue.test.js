@@ -1,44 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-// Import the private chunkMessages via the public API or re-implement
-// Since chunkMessages is not exported, we test through enqueue/flush indirectly
-// or import via the module. For now, let's inline the chunking logic.
-
-/**
- * Inline copy of chunkMessages from telemetryQueue.js
- * @param {string[]} messages
- * @returns {string[][]}
- */
-function chunkMessages(messages) {
-  const EMBED_MAX_FIELDS = 25;
-  const FIELD_VALUE_LIMIT = 1024;
-  const chunks = [];
-  let current = [];
-  let currentLength = 0;
-
-  for (const msg of messages) {
-    const line = `\u2022 ${msg}`;
-    const lineLen = line.length;
-
-    if (
-      current.length >= EMBED_MAX_FIELDS ||
-      currentLength + lineLen > FIELD_VALUE_LIMIT
-    ) {
-      chunks.push(current);
-      current = [];
-      currentLength = 0;
-    }
-
-    current.push(line);
-    currentLength += lineLen;
-  }
-
-  if (current.length > 0) {
-    chunks.push(current);
-  }
-
-  return chunks;
-}
+import { chunkMessages } from "./telemetryQueue.js";
 
 describe("chunkMessages", () => {
   it("returns a single chunk when under limits", () => {
@@ -69,8 +30,8 @@ describe("chunkMessages", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("prefixes each line with a bullet", () => {
-    const result = chunkMessages(["hello"]);
-    expect(result[0][0]).toBe("\u2022 hello");
+  it("preserves message content (bullet not added by chunking)", () => {
+    const result = chunkMessages(["• **FLAG** hello"]);
+    expect(result[0][0]).toBe("• **FLAG** hello");
   });
 });

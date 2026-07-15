@@ -1,6 +1,9 @@
 import { PermissionFlagsBits, ChannelType } from "discord.js";
 import { clog } from "../utils/clog.js";
 import { enqueue } from "../utils/telemetryQueue.js";
+import { t, getGuildLanguage } from "../core/locale.js";
+
+const LOG_TAG = "[src/modules/raidProtection.js]";
 
 const SPIKE_WINDOW_MS = 60_000;
 const AUTO_ESCALATION = {
@@ -8,17 +11,22 @@ const AUTO_ESCALATION = {
   1: { spikeThreshold: 20, nextStage: 2 },
   2: { spikeThreshold: 30, nextStage: 3 },
 };
+const MAX_RAID_STATE_ENTRIES = 10_000;
 
 const raidState = new Map();
 
 let autoDetectionInterval = null;
 
+/** @type {import('discord.js').Client|null} */
+let discordClient = null;
+
+export function setClient(client) {
+  discordClient = client;
+}
+
 export function startRaidDetection() {
   if (autoDetectionInterval) {
-    clog(
-      console.log,
-      `[src/modules/raidProtection.js] Auto-detection timer already running, skipping`,
-    );
+    clog(console.log, `${LOG_TAG} Auto-detection timer already running, skipping`);
     return;
   }
 
@@ -34,7 +42,7 @@ export function startRaidDetection() {
       if (elapsed > SPIKE_WINDOW_MS) {
         clog(
           console.log,
-          `[src/modules/raidProtection.js] Detection: guild ${guildId} window expired (${elapsed}ms > ${SPIKE_WINDOW_MS}ms), resetting spike count from ${state.spikeCount} to 0`,
+          `${LOG_TAG} Detection: guild ${guildId} window expired (${elapsed}ms > ${SPIKE_WINDOW_MS}ms), resetting spike count from ${state.spikeCount} to 0`,
         );
         state.spikeCount = 0;
         state.spikeWindowStart = now;
@@ -44,12 +52,12 @@ export function startRaidDetection() {
       const rule = AUTO_ESCALATION[state.stage];
       clog(
         console.log,
-        `[src/modules/raidProtection.js] Detection: guild ${guildId} stage=${state.stage}, spikes=${state.spikeCount}, threshold=${rule?.spikeThreshold || "N/A"}, elapsed=${elapsed}ms`,
+        `${LOG_TAG} Detection: guild ${guildId} stage=${state.stage}, spikes=${state.spikeCount}, threshold=${rule?.spikeThreshold || "N/A"}, elapsed=${elapsed}ms`,
       );
       if (rule && state.spikeCount >= rule.spikeThreshold) {
         clog(
           console.warn,
-          `[src/modules/raidProtection.js] AUTO-ESCALATION: guild ${guildId} stage ${state.stage} → ${rule.nextStage} (${state.spikeCount} spikes ≥ ${rule.spikeThreshold} threshold)`,
+          `${LOG_TAG} AUTO-ESCALATION: guild ${guildId} stage ${state.stage} → ${rule.nextStage} (${state.spikeCount} spikes ≥ ${rule.spikeThreshold} threshold)`,
         );
         escalated++;
         escalate(guildId, rule.nextStage);
@@ -58,21 +66,29 @@ export function startRaidDetection() {
     if (escalated === 0) {
       clog(
         console.log,
-        `[src/modules/raidProtection.js] Detection cycle: ${raidState.size} guilds checked, no escalation needed`,
+        `${LOG_TAG} Detection cycle: ${raidState.size} guilds checked, no escalation needed`,
+      );
+    }
+
+    if (raidState.size > MAX_RAID_STATE_ENTRIES) {
+      const sorted = [...raidState.entries()].sort(
+        (a, b) => a[1].spikeWindowStart - b[1].spikeWindowStart,
+      );
+      const toEvict = sorted.slice(0, raidState.size - MAX_RAID_STATE_ENTRIES);
+      for (const [key] of toEvict) {
+        raidState.delete(key);
+      }
+      clog(
+        console.warn,
+        `${LOG_TAG} Capped raid state: evicted ${toEvict.length} oldest entries, ${raidState.size} remaining`,
       );
     }
   }, 30_000);
 
-  if (
-    autoDetectionInterval &&
-    typeof autoDetectionInterval.unref === "function"
-  ) {
+  if (autoDetectionInterval && typeof autoDetectionInterval.unref === "function") {
     autoDetectionInterval.unref();
   }
-  clog(
-    console.log,
-    `[src/modules/raidProtection.js] Auto-detection timer started (${30_000}ms interval)`,
-  );
+  clog(console.log, `${LOG_TAG} Auto-detection timer started (${30_000}ms interval)`);
 }
 
 /**
@@ -86,13 +102,13 @@ export function recordSpike(guildId) {
     raidState.set(guildId, state);
     clog(
       console.log,
-      `[src/modules/raidProtection.js] First spike recorded for guild ${guildId} — new raid state initialized`,
+      `${LOG_TAG} First spike recorded for guild ${guildId} — new raid state initialized`,
     );
   }
   state.spikeCount++;
   clog(
     console.log,
-    `[src/modules/raidProtection.js] Spike recorded for guild ${guildId} — total: ${state.spikeCount} in current window`,
+    `${LOG_TAG} Spike recorded for guild ${guildId} — total: ${state.spikeCount} in current window`,
   );
 }
 
@@ -126,9 +142,16 @@ export async function setRaidStage(guild, targetStage, db) {
 
     clog(
       console.log,
-      `[src/modules/raidProtection.js] Stage changed: ${current} → ${targetStage} for guild ${guild.id} (${guild.name})`,
+      `${LOG_TAG} Stage changed: ${current} → ${targetStage} for guild ${guild.id} (${guild.name})`,
     );
-    enqueue("action", `Raid stage changed: ${current} → ${targetStage}`);
+    enqueue(
+      "action",
+      guild.id,
+      t(getGuildLanguage(db, guild.id), "raid.telemetry.stageChanged", {
+        from: current,
+        to: targetStage,
+      }),
+    );
     return true;
   } catch (err) {
     clog(console.error, `[RAID] Stage transition failed:`, err);
@@ -151,7 +174,7 @@ async function executeStageTransition(guild, fromStage, toStage, db) {
 
   if (toStage === 1 && fromStage === 0) {
     await backupPermissions(guild, db);
-    await setSlowmode(guild, 1800);
+    await setSlowmode(guild, db, 1800);
     return;
   }
 
@@ -159,14 +182,14 @@ async function executeStageTransition(guild, fromStage, toStage, db) {
     if (fromStage === 0) {
       await backupPermissions(guild, db);
     }
-    await setSlowmode(guild, 7200);
+    await setSlowmode(guild, db, 7200);
     return;
   }
 
   if (toStage === 3) {
     await restoreFromBackup(guild, db);
-    await disableEveryoneSend(guild);
-    await ensureRaidChannel(guild);
+    await disableEveryoneSend(guild, db);
+    await ensureRaidChannel(guild, db);
     return;
   }
 }
@@ -175,15 +198,16 @@ async function executeStageTransition(guild, fromStage, toStage, db) {
  * Stage 0: Revert all changes.
  */
 async function revertAll(guild, db) {
+  const lang = getGuildLanguage(db, guild.id);
   await restoreFromBackup(guild, db);
-  await clearSlowmode(guild);
+  await clearSlowmode(guild, db);
 
   const existing = guild.channels.cache.find(
     (c) => c.name === "raid-temp-channel" && c.type === ChannelType.GuildText,
   );
   if (existing) {
     try {
-      await existing.delete("Raid mode ended");
+      await existing.delete(t(lang, "raid.reason.channelDeleted"));
     } catch {
       // ignore
     }
@@ -197,7 +221,8 @@ async function revertAll(guild, db) {
  * @param {import('discord.js').Guild} guild
  * @param {number} seconds
  */
-async function setSlowmode(guild, seconds) {
+async function setSlowmode(guild, db, seconds) {
+  const lang = getGuildLanguage(db, guild.id);
   const channels = guild.channels.cache.filter(
     (c) => c.isTextBased() && c.type === ChannelType.GuildText,
   );
@@ -206,7 +231,7 @@ async function setSlowmode(guild, seconds) {
   for (const [, channel] of channels) {
     promises.push(
       channel
-        .edit({ rateLimitPerUser: seconds, reason: "EXIA raid protection" })
+        .edit({ rateLimitPerUser: seconds, reason: t(lang, "raid.reason.slowmode") })
         .catch(() => {}),
     );
   }
@@ -216,7 +241,8 @@ async function setSlowmode(guild, seconds) {
 /**
  * Clears slowmode on all channels.
  */
-async function clearSlowmode(guild) {
+async function clearSlowmode(guild, db) {
+  const lang = getGuildLanguage(db, guild.id);
   const channels = guild.channels.cache.filter(
     (c) => c.isTextBased() && c.type === ChannelType.GuildText,
   );
@@ -224,7 +250,7 @@ async function clearSlowmode(guild) {
   for (const [, channel] of channels) {
     promises.push(
       channel
-        .edit({ rateLimitPerUser: 0, reason: "EXIA raid protection ended" })
+        .edit({ rateLimitPerUser: 0, reason: t(lang, "raid.reason.slowmodeEnded") })
         .catch(() => {}),
     );
   }
@@ -234,7 +260,8 @@ async function clearSlowmode(guild) {
 /**
  * Stage 3: Disable SEND_MESSAGES for @everyone in all text channels.
  */
-async function disableEveryoneSend(guild) {
+async function disableEveryoneSend(guild, db) {
+  const lang = getGuildLanguage(db, guild.id);
   const everyone = guild.roles.everyone;
   const channels = guild.channels.cache.filter(
     (c) => c.isTextBased() && c.type === ChannelType.GuildText,
@@ -244,11 +271,7 @@ async function disableEveryoneSend(guild) {
   for (const [, channel] of channels) {
     promises.push(
       channel.permissionOverwrites
-        .edit(
-          everyone,
-          { SendMessages: false },
-          { reason: "EXIA raid lockdown" },
-        )
+        .edit(everyone, { SendMessages: false }, { reason: t(lang, "raid.reason.lockdown") })
         .catch(() => {}),
     );
   }
@@ -258,7 +281,8 @@ async function disableEveryoneSend(guild) {
 /**
  * Stage 3: Create or ensure the raid temp channel exists.
  */
-async function ensureRaidChannel(guild) {
+async function ensureRaidChannel(guild, db) {
+  const lang = getGuildLanguage(db, guild.id);
   const existing = guild.channels.cache.find(
     (c) => c.name === "raid-temp-channel" && c.type === ChannelType.GuildText,
   );
@@ -270,14 +294,11 @@ async function ensureRaidChannel(guild) {
     await guild.channels.create({
       name: "raid-temp-channel",
       type: ChannelType.GuildText,
-      reason: "EXIA raid lockdown",
+      reason: t(lang, "raid.reason.lockdown"),
       permissionOverwrites: [
         {
           id: guild.roles.everyone.id,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-          ],
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
         },
       ],
     });
@@ -326,9 +347,7 @@ async function backupPermissions(guild, db) {
  * Restores channel permission overwrites from the backup.
  */
 async function restoreFromBackup(guild, db) {
-  const row = db
-    .prepare("SELECT backup_json FROM RaidState WHERE guild_id = ?")
-    .get(guild.id);
+  const row = db.prepare("SELECT backup_json FROM RaidState WHERE guild_id = ?").get(guild.id);
 
   if (!row?.backup_json) {
     return;
@@ -337,53 +356,51 @@ async function restoreFromBackup(guild, db) {
   /** @type {Array} */
   const backup = JSON.parse(row.backup_json);
 
+  const promises = [];
   for (const entry of backup) {
     const channel = guild.channels.cache.get(entry.channelId);
     if (!channel) {
       continue;
     }
 
-    try {
-      for (const ow of entry.overwrites) {
-        await channel.permissionOverwrites
-          .edit(ow.id, {
-            SendMessages: null,
-            ViewChannel: null,
-          })
-          .catch(() => {});
-      }
-    } catch {
-      // skip
+    for (const ow of entry.overwrites) {
+      promises.push(
+        channel.permissionOverwrites
+          .edit(ow.id, { SendMessages: null, ViewChannel: null })
+          .catch(() => {}),
+      );
     }
   }
+  await Promise.allSettled(promises);
 }
 
 /**
  * Escalates to a higher stage (internal, no permission checks).
  */
 async function escalate(guildId, targetStage) {
+  if (!discordClient) {
+    return;
+  }
   const { getDatabase } = await import("../core/database.js");
-  const { client } = await import("../index.js");
 
-  const guild = client.guilds.cache.get(guildId);
+  const guild = discordClient.guilds.cache.get(guildId);
   if (!guild) {
     return;
   }
 
   const db = getDatabase();
-  await executeStageTransition(
-    guild,
-    raidState.get(guildId)?.stage ?? 0,
-    targetStage,
-    db,
-  );
+  await executeStageTransition(guild, raidState.get(guildId)?.stage ?? 0, targetStage, db);
   updateMemoryState(guildId, targetStage);
   persistRaidState(db, guildId, targetStage);
 
-  enqueue("action", `Raid auto-escalated to stage ${targetStage}`);
+  enqueue(
+    "action",
+    guildId,
+    t(getGuildLanguage(db, guildId), "raid.telemetry.autoEscalated", { stage: targetStage }),
+  );
   clog(
     console.log,
-    `[src/modules/raidProtection.js] escalate() complete — guild ${guildId} now at stage ${targetStage}`,
+    `${LOG_TAG} escalate() complete — guild ${guildId} now at stage ${targetStage}`,
   );
 }
 

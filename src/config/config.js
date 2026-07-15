@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { clog } from "../utils/clog.js";
 
+const LOG_TAG = "[src/config/config.js]";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -37,19 +39,16 @@ function validateConfig() {
   }
 
   if (missing.essential.length > 0) {
-    clog(
-      console.error,
-      `[src/config/config.js] Missing essential variables: ${missing.essential.join(", ")}`,
-    );
+    clog(console.error, `${LOG_TAG} Missing essential variables: ${missing.essential.join(", ")}`);
     process.exit(1);
   }
   if (missing.nonEssential.length > 0) {
     clog(
       console.warn,
-      `[src/config/config.js] Missing non-essential variables: ${missing.nonEssential.join(", ")}`,
+      `${LOG_TAG} Missing non-essential variables: ${missing.nonEssential.join(", ")}`,
     );
   }
-  clog(console.log, "[src/config/config.js] Validation Success.");
+  clog(console.log, `${LOG_TAG} Validation Success.`);
 }
 
 validateConfig();

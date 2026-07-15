@@ -1,47 +1,63 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { t } from "../core/locale.js";
 
-/**
- * /actions command — appeal, rejoin link, and manual ban.
- * @type {import('discord.js').SlashCommandBuilder}
- */
 export const actionsCommand = new SlashCommandBuilder()
   .setName("actions")
-  .setDescription("Moderation action commands")
+  .setDescription(t("en", "command.actions.description"))
+  .setDescriptionLocalizations({ ja: t("ja", "command.actions.description") })
   .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
 
   .addSubcommand((sub) =>
     sub
       .setName("appeal")
-      .setDescription("Set appeal contact info (shown to banned users)")
+      .setDescription(t("en", "command.actions.appeal.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.actions.appeal.description") })
       .addStringOption((opt) =>
         opt
           .setName("message")
-          .setDescription("Contact info or instructions for banned users")
+          .setDescription(t("en", "command.actions.appeal.options.message.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.actions.appeal.options.message.description"),
+          })
           .setRequired(true),
       ),
   )
   .addSubcommand((sub) =>
     sub
       .setName("rejoin")
-      .setDescription("Set rejoin invite link (sent to kicked users)")
+      .setDescription(t("en", "command.actions.rejoin.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.actions.rejoin.description") })
       .addStringOption((opt) =>
         opt
           .setName("link")
-          .setDescription("Rejoin invite link")
+          .setDescription(t("en", "command.actions.rejoin.options.link.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.actions.rejoin.options.link.description"),
+          })
           .setRequired(true),
       ),
   )
   .addSubcommand((sub) =>
     sub
       .setName("ban")
-      .setDescription("Ban a user with optional message deletion")
+      .setDescription(t("en", "command.actions.ban.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.actions.ban.description") })
       .addUserOption((opt) =>
-        opt.setName("user").setDescription("User to ban").setRequired(true),
+        opt
+          .setName("user")
+          .setDescription(t("en", "command.actions.ban.options.user.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.actions.ban.options.user.description"),
+          })
+          .setRequired(true),
       )
       .addIntegerOption((opt) =>
         opt
           .setName("delete_past")
-          .setDescription("Delete messages from last N hours (max 168)")
+          .setDescription(t("en", "command.actions.ban.options.delete_past.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.actions.ban.options.delete_past.description"),
+          })
           .setRequired(false)
           .setMinValue(0)
           .setMaxValue(168),
@@ -50,5 +66,6 @@ export const actionsCommand = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName("refresh")
-      .setDescription("Re-scan all cached members with user_profile module"),
+      .setDescription(t("en", "command.actions.refresh.description"))
+      .setDescriptionLocalizations({ ja: t("ja", "command.actions.refresh.description") }),
   );

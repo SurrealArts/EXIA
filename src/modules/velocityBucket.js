@@ -1,5 +1,7 @@
 import { clog } from "../utils/clog.js";
 
+const LOG_TAG = "[src/modules/velocityBucket.js]";
+
 const DEFAULT_BUCKET_CAPACITY = 20;
 const DEFAULT_REFILL_RATE = 1;
 const DEFAULT_REFILL_INTERVAL_MS = 1_000;
@@ -8,6 +10,8 @@ const EXCEED_PRESSURE = 5;
 const MULTI_CHANNEL_PRESSURE = 30;
 const MULTI_CHANNEL_WINDOW_MS = 10_000;
 const MULTI_CHANNEL_THRESHOLD = 3;
+const MAX_BUCKETS = 50_000;
+const MAX_CHANNEL_ACTIVITY_ENTRIES = 50_000;
 
 /** @type {Map<string, { tokens: number, lastRefill: number }>} */
 const buckets = new Map();
@@ -26,10 +30,7 @@ export function startRefillTimer() {
     const now = Date.now();
     let refilled = 0;
     for (const [key, bucket] of buckets.entries()) {
-      bucket.tokens = Math.min(
-        DEFAULT_BUCKET_CAPACITY,
-        bucket.tokens + DEFAULT_REFILL_RATE,
-      );
+      bucket.tokens = Math.min(DEFAULT_BUCKET_CAPACITY, bucket.tokens + DEFAULT_REFILL_RATE);
       bucket.lastRefill = now;
       refilled++;
 
@@ -37,14 +38,43 @@ export function startRefillTimer() {
         buckets.delete(key);
         clog(
           console.log,
-          `[src/modules/velocityBucket.js] Refill: ${key} reached capacity ${DEFAULT_BUCKET_CAPACITY}, removed from active buckets`,
+          `${LOG_TAG} Refill: ${key} reached capacity ${DEFAULT_BUCKET_CAPACITY}, removed from active buckets`,
         );
       }
     }
+    if (buckets.size > MAX_BUCKETS) {
+      const sorted = [...buckets.entries()].sort((a, b) => a[1].lastRefill - b[1].lastRefill);
+      const toEvict = sorted.slice(0, buckets.size - MAX_BUCKETS);
+      for (const [key] of toEvict) {
+        buckets.delete(key);
+        channelActivity.delete(key);
+      }
+      clog(
+        console.warn,
+        `${LOG_TAG} Capped buckets: evicted ${toEvict.length} oldest, ${buckets.size} remaining`,
+      );
+    }
+
+    if (channelActivity.size > MAX_CHANNEL_ACTIVITY_ENTRIES) {
+      const sorted = [...channelActivity.entries()].sort((a, b) => {
+        const aLatest = Math.max(...a[1].values());
+        const bLatest = Math.max(...b[1].values());
+        return aLatest - bLatest;
+      });
+      const toEvict = sorted.slice(0, channelActivity.size - MAX_CHANNEL_ACTIVITY_ENTRIES);
+      for (const [key] of toEvict) {
+        channelActivity.delete(key);
+      }
+      clog(
+        console.warn,
+        `${LOG_TAG} Capped channelActivity: evicted ${toEvict.length} oldest, ${channelActivity.size} remaining`,
+      );
+    }
+
     if (refilled > 0) {
       clog(
         console.log,
-        `[src/modules/velocityBucket.js] Refill cycle: ${refilled} buckets refilled (+${DEFAULT_REFILL_RATE} token each), ${buckets.size} active buckets remaining`,
+        `${LOG_TAG} Refill cycle: ${refilled} buckets refilled (+${DEFAULT_REFILL_RATE} token each), ${buckets.size} active buckets remaining`,
       );
     }
   }, DEFAULT_REFILL_INTERVAL_MS);
@@ -80,7 +110,7 @@ export function consumeToken(guildId, userId, channelId) {
     buckets.set(key, bucket);
     clog(
       console.log,
-      `[src/modules/velocityBucket.js] New bucket created for ${key} — initial tokens: ${DEFAULT_BUCKET_CAPACITY}`,
+      `${LOG_TAG} New bucket created for ${key} — initial tokens: ${DEFAULT_BUCKET_CAPACITY}`,
     );
   }
 
@@ -95,7 +125,7 @@ export function consumeToken(guildId, userId, channelId) {
     bucket.lastRefill = now;
     clog(
       console.log,
-      `[src/modules/velocityBucket.js] ${key} refilled: ${before} → ${bucket.tokens} (${refills} refill cycles, elapsed ${elapsed}ms)`,
+      `${LOG_TAG} ${key} refilled: ${before} → ${bucket.tokens} (${refills} refill cycles, elapsed ${elapsed}ms)`,
     );
   }
 
@@ -119,13 +149,13 @@ export function consumeToken(guildId, userId, channelId) {
     }
     clog(
       console.log,
-      `[src/modules/velocityBucket.js] ${key} channel activity: ${active} active channels in ${MULTI_CHANNEL_WINDOW_MS / 1000}s window (threshold: ${MULTI_CHANNEL_THRESHOLD})`,
+      `${LOG_TAG} ${key} channel activity: ${active} active channels in ${MULTI_CHANNEL_WINDOW_MS / 1000}s window (threshold: ${MULTI_CHANNEL_THRESHOLD})`,
     );
     if (active >= MULTI_CHANNEL_THRESHOLD) {
       multiChannel = true;
       clog(
         console.warn,
-        `[src/modules/velocityBucket.js] MULTI-CHANNEL DETECTED for ${key} — ${active} channels in ${MULTI_CHANNEL_WINDOW_MS / 1000}s window, applying ${MULTI_CHANNEL_PRESSURE} pressure`,
+        `${LOG_TAG} MULTI-CHANNEL DETECTED for ${key} — ${active} channels in ${MULTI_CHANNEL_WINDOW_MS / 1000}s window, applying ${MULTI_CHANNEL_PRESSURE} pressure`,
       );
     }
   }
@@ -133,7 +163,7 @@ export function consumeToken(guildId, userId, channelId) {
   if (multiChannel) {
     clog(
       console.log,
-      `[src/modules/velocityBucket.js] ${key} — multi-channel rapid-fire: exceeded=true, pressure=${MULTI_CHANNEL_PRESSURE}, tokens remaining=${bucket.tokens}`,
+      `${LOG_TAG} ${key} — multi-channel rapid-fire: exceeded=true, pressure=${MULTI_CHANNEL_PRESSURE}, tokens remaining=${bucket.tokens}`,
     );
     return {
       exceeded: true,
@@ -146,7 +176,7 @@ export function consumeToken(guildId, userId, channelId) {
   if (bucket.tokens < TOKEN_COST_PER_ACTION) {
     clog(
       console.log,
-      `[src/modules/velocityBucket.js] ${key} — token exhaustion: tokens=${bucket.tokens}, cost=${TOKEN_COST_PER_ACTION}, exceeded=true, pressure=${EXCEED_PRESSURE}`,
+      `${LOG_TAG} ${key} — token exhaustion: tokens=${bucket.tokens}, cost=${TOKEN_COST_PER_ACTION}, exceeded=true, pressure=${EXCEED_PRESSURE}`,
     );
     return {
       exceeded: true,
@@ -159,7 +189,7 @@ export function consumeToken(guildId, userId, channelId) {
   bucket.tokens -= TOKEN_COST_PER_ACTION;
   clog(
     console.log,
-    `[src/modules/velocityBucket.js] ${key} — token consumed: ${bucket.tokens + 1} → ${bucket.tokens}, exceeded=false`,
+    `${LOG_TAG} ${key} — token consumed: ${bucket.tokens + 1} → ${bucket.tokens}, exceeded=false`,
   );
   return {
     exceeded: false,

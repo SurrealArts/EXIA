@@ -1,6 +1,13 @@
 import { MessageFlags } from "discord.js";
 import { getDatabase } from "../core/database.js";
 import { clog } from "../utils/clog.js";
+import { t, resolveInteractionLang } from "../core/locale.js";
+import { handleLanguageCommand } from "../commands/language.js";
+import { invalidateCache } from "../utils/queryCache.js";
+
+// TODO: This file is too large. Consider splitting it into multiple files for better maintainability.
+
+const LOG_TAG = "[src/events/interactionCreate.js]";
 
 /**
  * @param {import('discord.js').Interaction} interaction
@@ -22,10 +29,11 @@ export default async function handleInteractionCreate(interaction) {
     : interaction.commandName;
   clog(
     console.log,
-    `[src/events/interactionCreate.js] <@${interaction.user.id}> ran /${fullCmd} in guild ${interaction.guildId}`,
+    `${LOG_TAG} <@${interaction.user.id}> ran /${fullCmd} in guild ${interaction.guildId}`,
   );
 
   const db = getDatabase();
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
 
   switch (interaction.commandName) {
     case "config":
@@ -43,9 +51,12 @@ export default async function handleInteractionCreate(interaction) {
     case "debug":
       await handleDebugCommand(interaction, db);
       break;
+    case "language":
+      await handleLanguageCommand(interaction, db);
+      break;
     default:
       await interaction.reply({
-        content: "Unknown command.",
+        content: t(lang, "reply.unknownCommand"),
         flags: MessageFlags.Ephemeral,
       });
   }
@@ -70,9 +81,7 @@ async function handleAutocomplete(interaction) {
         .all(interaction.guildId, `%${focused.value}%`);
 
       await interaction.respond(
-        profiles
-          .map((p) => ({ name: p.profile_name, value: p.profile_name }))
-          .slice(0, 25),
+        profiles.map((p) => ({ name: p.profile_name, value: p.profile_name })).slice(0, 25),
       );
       return;
     }
@@ -89,9 +98,7 @@ async function handleAutocomplete(interaction) {
         .all(interaction.guildId, `%${focused.value}%`);
 
       await interaction.respond(
-        rules
-          .map((r) => ({ name: r.rule_identifier, value: r.rule_identifier }))
-          .slice(0, 25),
+        rules.map((r) => ({ name: r.rule_identifier, value: r.rule_identifier })).slice(0, 25),
       );
       return;
     }
@@ -107,6 +114,7 @@ async function handleAutocomplete(interaction) {
  * @param {import('better-sqlite3').Database} db
  */
 async function handleConfigCommand(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
   const subcommandGroup = interaction.options.getSubcommandGroup(false);
   const subcommand = interaction.options.getSubcommand();
 
@@ -137,14 +145,18 @@ async function handleConfigCommand(interaction, db) {
       activeState ? 1 : 0,
       activeState ? 1 : 0,
     );
+    invalidateCache();
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] Module "${moduleName}" toggled ${activeState ? "ON" : "OFF"} (weight: ${weight}, critical: ${isCritical}) by <@${interaction.user.id}>`,
+      `${LOG_TAG} Module "${moduleName}" toggled ${activeState ? "ON" : "OFF"} (weight: ${weight}, critical: ${isCritical}) by <@${interaction.user.id}>`,
     );
 
     await interaction.reply({
-      content: `Module **${moduleName}** is now ${activeState ? "enabled" : "disabled"}.`,
+      content: t(lang, "reply.config.modules.toggle", {
+        moduleName,
+        activeState: t(lang, activeState ? "status.enabled" : "status.disabled"),
+      }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -161,14 +173,15 @@ async function handleConfigCommand(interaction, db) {
        ON CONFLICT(guild_id, module_name)
        DO UPDATE SET weight = ?`,
     ).run(interaction.guildId, moduleName, value, value);
+    invalidateCache();
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] Module "${moduleName}" weight → ${value} by <@${interaction.user.id}>`,
+      `${LOG_TAG} Module "${moduleName}" weight → ${value} by <@${interaction.user.id}>`,
     );
 
     await interaction.reply({
-      content: `Module **${moduleName}** weight set to **${value}**.`,
+      content: t(lang, "reply.config.modules.weight", { moduleName, value }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -201,14 +214,18 @@ async function handleConfigCommand(interaction, db) {
       isEnabled,
       isCritical ? 1 : 0,
     );
+    invalidateCache();
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] Module "${moduleName}" critical → ${isCritical ? "ON" : "OFF"} by <@${interaction.user.id}>`,
+      `${LOG_TAG} Module "${moduleName}" critical → ${isCritical ? "ON" : "OFF"} by <@${interaction.user.id}>`,
     );
 
     await interaction.reply({
-      content: `Module **${moduleName}** critical flag set to **${isCritical ? "Yes (instant ban)" : "No"}**.`,
+      content: t(lang, "reply.config.modules.critical", {
+        moduleName,
+        isCritical: t(lang, isCritical ? "status.yesInstantBan" : "status.no"),
+      }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -217,10 +234,7 @@ async function handleConfigCommand(interaction, db) {
   // /config thresholds assign
   if (subcommandGroup === "thresholds" && subcommand === "assign") {
     const tier = interaction.options.getInteger("action_tier", true);
-    const pressureLimit = interaction.options.getInteger(
-      "pressure_limit",
-      true,
-    );
+    const pressureLimit = interaction.options.getInteger("pressure_limit", true);
     const deleteSec = interaction.options.getInteger("delete_after") ?? 120;
 
     const tierNames = { 1: "warn", 2: "mute", 3: "kick", 4: "ban" };
@@ -241,14 +255,20 @@ async function handleConfigCommand(interaction, db) {
       deleteSec,
       pressureLimit,
     );
+    invalidateCache();
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] Tier ${tier} threshold → ${pressureLimit}p => ${action} (delete: ${deleteSec}s) by <@${interaction.user.id}>`,
+      `${LOG_TAG} Tier ${tier} threshold → ${pressureLimit}p => ${action} (delete: ${deleteSec}s) by <@${interaction.user.id}>`,
     );
 
     await interaction.reply({
-      content: `Tier ${tier} threshold set to **${pressureLimit}** pressure → **${action}** (delete after ${deleteSec}s).`,
+      content: t(lang, "reply.config.thresholds.assign", {
+        tier,
+        pressureLimit,
+        action,
+        deleteSec,
+      }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -256,36 +276,39 @@ async function handleConfigCommand(interaction, db) {
 
   // /config regex create
   if (subcommand === "create" && subcommandGroup === "regex") {
-    const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } =
+    const { ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder } =
       await import("discord.js");
 
     const modal = new ModalBuilder()
       .setCustomId("regex_create_modal")
-      .setTitle("Create Regex Rule");
+      .setTitle(t(lang, "reply.config.regex.create.modalTitle"));
 
     const ruleIdInput = new TextInputBuilder()
       .setCustomId("rule_identifier")
-      .setLabel("Rule Identifier")
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(50);
 
     const patternInput = new TextInputBuilder()
       .setCustomId("pattern")
-      .setLabel("Regex Pattern")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true);
 
     const weightInput = new TextInputBuilder()
       .setCustomId("threat_weight")
-      .setLabel("Threat Weight (integer)")
       .setStyle(TextInputStyle.Short)
       .setRequired(false);
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(ruleIdInput),
-      new ActionRowBuilder().addComponents(patternInput),
-      new ActionRowBuilder().addComponents(weightInput),
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel(t(lang, "reply.config.regex.create.modal.ruleId.label"))
+        .setTextInputComponent(ruleIdInput),
+      new LabelBuilder()
+        .setLabel(t(lang, "reply.config.regex.create.modal.pattern.label"))
+        .setTextInputComponent(patternInput),
+      new LabelBuilder()
+        .setLabel(t(lang, "reply.config.regex.create.modal.weight.label"))
+        .setTextInputComponent(weightInput),
     );
 
     await interaction.showModal(modal);
@@ -300,15 +323,19 @@ async function handleConfigCommand(interaction, db) {
 
     if (!rules.length) {
       await interaction.reply({
-        content: "No regex rules configured.",
+        content: t(lang, "reply.config.regex.list.none"),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    const lines = rules.map(
-      (r, i) =>
-        `**${i + 1}.** \`${r.rule_identifier}\` — weight: ${r.threat_weight}, critical: ${r.is_critical === 1 ? "Yes" : "No"}`,
+    const lines = rules.map((r, i) =>
+      t(lang, "reply.config.regex.list.line", {
+        index: i + 1,
+        identifier: r.rule_identifier,
+        weight: r.threat_weight,
+        critical: r.is_critical === 1 ? t(lang, "status.yes") : t(lang, "status.no"),
+      }),
     );
     await interaction.reply({
       content: lines.join("\n"),
@@ -322,51 +349,52 @@ async function handleConfigCommand(interaction, db) {
     const identifier = interaction.options.getString("identifier", true);
 
     const rule = db
-      .prepare(
-        "SELECT * FROM RegexRules WHERE guild_id = ? AND rule_identifier = ?",
-      )
+      .prepare("SELECT * FROM RegexRules WHERE guild_id = ? AND rule_identifier = ?")
       .get(interaction.guildId, identifier);
 
     if (!rule) {
       await interaction.reply({
-        content: `No regex rule found with identifier **${identifier}**.`,
+        content: t(lang, "reply.config.regex.edit.notFound", { identifier }),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } =
+    const { ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder } =
       await import("discord.js");
 
     const modal = new ModalBuilder()
       .setCustomId(`regex_edit_modal_${identifier}`)
-      .setTitle(`Edit Regex: ${identifier}`);
+      .setTitle(t(lang, "reply.config.regex.edit.modalTitle", { identifier }));
 
     const patternInput = new TextInputBuilder()
       .setCustomId("pattern")
-      .setLabel("Regex Pattern")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true)
       .setValue(rule.pattern);
 
     const weightInput = new TextInputBuilder()
       .setCustomId("threat_weight")
-      .setLabel("Threat Weight (integer, default 10)")
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setValue(String(rule.threat_weight));
 
     const criticalInput = new TextInputBuilder()
       .setCustomId("is_critical")
-      .setLabel("Critical? (yes or no, default no)")
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setValue(rule.is_critical === 1 ? "yes" : "no");
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(patternInput),
-      new ActionRowBuilder().addComponents(weightInput),
-      new ActionRowBuilder().addComponents(criticalInput),
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel(t(lang, "reply.config.regex.edit.modal.pattern.label"))
+        .setTextInputComponent(patternInput),
+      new LabelBuilder()
+        .setLabel(t(lang, "reply.config.regex.edit.modal.weight.label"))
+        .setTextInputComponent(weightInput),
+      new LabelBuilder()
+        .setLabel(t(lang, "reply.config.regex.edit.modal.critical.label"))
+        .setTextInputComponent(criticalInput),
     );
 
     await interaction.showModal(modal);
@@ -378,28 +406,24 @@ async function handleConfigCommand(interaction, db) {
     const identifier = interaction.options.getString("identifier", true);
 
     const result = db
-      .prepare(
-        "DELETE FROM RegexRules WHERE guild_id = ? AND rule_identifier = ?",
-      )
+      .prepare("DELETE FROM RegexRules WHERE guild_id = ? AND rule_identifier = ?")
       .run(interaction.guildId, identifier);
+    invalidateCache();
 
     if (result.changes === 0) {
       await interaction.reply({
-        content: `No regex rule found with identifier **${identifier}**.`,
+        content: t(lang, "reply.config.regex.delete.notFound", { identifier }),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
     await interaction.reply({
-      content: `Regex rule **${identifier}** deleted.`,
+      content: t(lang, "reply.config.regex.delete.success", { identifier }),
       flags: MessageFlags.Ephemeral,
     });
 
-    clog(
-      console.log,
-      `[src/events/interactionCreate.js] Regex rule "${identifier}" deleted by <@${interaction.user.id}>`,
-    );
+    clog(console.log, `${LOG_TAG} Regex rule "${identifier}" deleted by <@${interaction.user.id}>`);
     return;
   }
 
@@ -411,11 +435,12 @@ async function handleConfigCommand(interaction, db) {
       `INSERT INTO GuildConfiguration (guild_id, honeypot_channel_id)
        VALUES (?, ?)
        ON CONFLICT(guild_id)
-       DO UPDATE SET honeypot_channel_id = ?`,
+        DO UPDATE SET honeypot_channel_id = ?`,
     ).run(interaction.guildId, channel.id, channel.id);
+    invalidateCache();
 
     await interaction.reply({
-      content: `Honeypot channel set to <#${channel.id}>.`,
+      content: t(lang, "reply.config.honeypot.set", { channelId: channel.id }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -429,11 +454,12 @@ async function handleConfigCommand(interaction, db) {
       `INSERT INTO GuildConfiguration (guild_id, log_channel_id)
        VALUES (?, ?)
        ON CONFLICT(guild_id)
-       DO UPDATE SET log_channel_id = ?`,
+        DO UPDATE SET log_channel_id = ?`,
     ).run(interaction.guildId, channel.id, channel.id);
+    invalidateCache();
 
     await interaction.reply({
-      content: `Log channel set to <#${channel.id}>.`,
+      content: t(lang, "reply.config.logchannel.set", { channelId: channel.id }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -452,9 +478,7 @@ async function handleConfigCommand(interaction, db) {
       .all(interaction.guildId);
 
     const thresholds = db
-      .prepare(
-        "SELECT * FROM ThresholdActions WHERE guild_id = ? ORDER BY pressure_tier",
-      )
+      .prepare("SELECT * FROM ThresholdActions WHERE guild_id = ? ORDER BY pressure_tier")
       .all(interaction.guildId);
 
     const regex = db
@@ -462,9 +486,7 @@ async function handleConfigCommand(interaction, db) {
       .all(interaction.guildId);
 
     const activeProfile = db
-      .prepare(
-        "SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?",
-      )
+      .prepare("SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?")
       .get(interaction.guildId);
 
     const allModuleNames = ["user_profile", "velocity", "honeypot", "regex"];
@@ -476,28 +498,47 @@ async function handleConfigCommand(interaction, db) {
       const m = moduleMap[name];
       if (!m) {
         return [
-          { name: "❌ " + name, value: "`absent`", inline: true },
-          { name: "Weight", value: "`0`", inline: true },
-          { name: "Critical", value: "`No`", inline: true },
+          {
+            name: "❌ " + name,
+            value: `\`${t(lang, "embed.config.modules.absent")}\``,
+            inline: true,
+          },
+          { name: t(lang, "embed.config.modules.weightLabel"), value: "`0`", inline: true },
+          {
+            name: t(lang, "embed.config.modules.criticalLabel"),
+            value: `\`${t(lang, "embed.config.modules.no")}\``,
+            inline: true,
+          },
         ];
       }
       const statusEmoji = m.is_enabled === 1 ? "✅" : "❌";
-      const critLabel = m.is_critical === 1 ? "⚠️ Yes" : "No";
+      const critLabel =
+        m.is_critical === 1
+          ? t(lang, "embed.config.modules.yesCritical")
+          : t(lang, "embed.config.modules.no");
 
       if (name === "regex") {
         const ruleWeights = regex.map((r) => r.threat_weight);
         const weightDisplay =
           ruleWeights.length > 0
             ? `${Math.min(...ruleWeights)}~${Math.max(...ruleWeights)}`
-            : "N/A";
+            : t(lang, "embed.config.modules.navValue");
         return [
           {
             name: `${statusEmoji} ${m.module_name}`,
             value: "** **",
             inline: true,
           },
-          { name: "Weight", value: `\`${weightDisplay}\``, inline: true },
-          { name: "Critical", value: `\`${critLabel}\``, inline: true },
+          {
+            name: t(lang, "embed.config.modules.weightLabel"),
+            value: `\`${weightDisplay}\``,
+            inline: true,
+          },
+          {
+            name: t(lang, "embed.config.modules.criticalLabel"),
+            value: `\`${critLabel}\``,
+            inline: true,
+          },
         ];
       }
 
@@ -505,16 +546,16 @@ async function handleConfigCommand(interaction, db) {
         return [
           {
             name: `${statusEmoji} ${m.module_name}`,
-            value: "Multiplier",
+            value: t(lang, "embed.config.modules.multiplier"),
             inline: true,
           },
           {
-            name: "Tiers",
-            value: "1.0x normal\n1.2x no avatar\n1.5x young\n2.0x both",
+            name: t(lang, "embed.config.modules.tiers"),
+            value: t(lang, "embed.config.modules.tiers.value"),
             inline: true,
           },
           {
-            name: "Critical",
+            name: t(lang, "embed.config.modules.criticalLabel"),
             value: `\`${critLabel}\``,
             inline: true,
           },
@@ -527,78 +568,118 @@ async function handleConfigCommand(interaction, db) {
           value: "** **",
           inline: true,
         },
-        { name: "Weight", value: `\`${m.weight}\``, inline: true },
-        { name: "Critical", value: `\`${critLabel}\``, inline: true },
+        {
+          name: t(lang, "embed.config.modules.weightLabel"),
+          value: `\`${m.weight}\``,
+          inline: true,
+        },
+        {
+          name: t(lang, "embed.config.modules.criticalLabel"),
+          value: `\`${critLabel}\``,
+          inline: true,
+        },
       ];
     });
 
+    const generalLines = [
+      t(lang, "embed.config.general.logChannel", {
+        channel: config?.log_channel_id
+          ? `<#${config.log_channel_id}>`
+          : t(lang, "embed.config.general.notSet"),
+      }),
+      t(lang, "embed.config.general.appealContact", {
+        contact: config?.appeal_link || t(lang, "embed.config.general.notSet"),
+      }),
+      t(lang, "embed.config.general.rejoinLink", {
+        link: config?.rejoin_link || t(lang, "embed.config.general.notSet"),
+      }),
+      t(lang, "embed.config.general.honeypot", {
+        channel: config?.honeypot_channel_id
+          ? `<#${config.honeypot_channel_id}>`
+          : t(lang, "embed.config.general.notSet"),
+      }),
+    ];
+
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle("EXIA Configuration")
+      .setTitle(t(lang, "embed.config.title"))
       .setDescription(
-        `Guild: **${interaction.guild.name}**\nProfile: **${activeProfile?.active_profile || "Standard"}**`,
+        t(lang, "embed.config.guildProfile", {
+          guildName: interaction.guild.name,
+          profileName: activeProfile?.active_profile || "Standard",
+        }),
       )
       .addFields(
         {
-          name: "General",
-          value: [
-            `Log Channel: ${config?.log_channel_id ? `<#${config.log_channel_id}>` : "Not set"}`,
-            `Appeal Contact: ${config?.appeal_link || "Not set"}`,
-            `Rejoin Link: ${config?.rejoin_link || "Not set"}`,
-            `Honeypot: ${config?.honeypot_channel_id ? `<#${config.honeypot_channel_id}>` : "Not set"}`,
-          ].join("\n"),
+          name: t(lang, "embed.config.general"),
+          value: generalLines.join("\n"),
         },
         {
-          name: "Modules",
+          name: t(lang, "embed.config.modules"),
           value: "** **",
         },
         ...moduleFields,
         {
-          name: "Thresholds",
+          name: t(lang, "embed.config.thresholds"),
           value:
             thresholds.length > 0
               ? thresholds
-                  .map(
-                    (t) =>
-                      `**Tier ${t.pressure_tier}** — Pressure **≥${t.pressure ?? 25}** → **${t.action}** (delete notice after ${t.message_delete_seconds}s)`,
+                  .map((th) =>
+                    t(lang, "embed.config.thresholds.line", {
+                      tier: th.pressure_tier,
+                      pressure: th.pressure ?? 25,
+                      action: th.action,
+                      deleteSec: th.message_delete_seconds,
+                    }),
                   )
                   .join("\n")
-              : "No thresholds configured.",
+              : t(lang, "embed.config.thresholds.none"),
         },
         {
-          name: "Regex Rules",
+          name: t(lang, "embed.config.regexRules"),
           value:
             regex.length > 0
               ? regex
-                  .map(
-                    (r) =>
-                      `**${r.rule_identifier}** — \`${r.pattern.length > 50 ? r.pattern.slice(0, 50) + "..." : r.pattern}\` (weight: ${r.threat_weight})`,
+                  .map((r) =>
+                    t(lang, "embed.config.regexRules.line", {
+                      identifier: r.rule_identifier,
+                      pattern: r.pattern.length > 50 ? r.pattern.slice(0, 50) + "..." : r.pattern,
+                      weight: r.threat_weight,
+                    }),
                   )
                   .join("\n")
-              : "No regex rules.",
+              : t(lang, "embed.config.regexRules.none"),
         },
         {
-          name: "Pressure → Action Map",
+          name: t(lang, "embed.config.pressureMap"),
           value: (() => {
             if (thresholds.length === 0) {
-              return "No thresholds configured.";
+              return t(lang, "embed.config.pressureMap.none");
             }
             const lines = [];
             const firstP = thresholds[0].pressure ?? 25;
             if (firstP > 0) {
-              lines.push(`**0–${firstP - 1}** → No action`);
+              lines.push(
+                t(lang, "embed.config.pressureMap.noAction", { start: 0, end: firstP - 1 }),
+              );
             }
             for (let i = 0; i < thresholds.length; i++) {
-              const t = thresholds[i];
-              const p = t.pressure ?? 25;
+              const th = thresholds[i];
+              const p = th.pressure ?? 25;
               const next =
-                i < thresholds.length - 1
-                  ? (thresholds[i + 1].pressure ?? 25) - 1
-                  : null;
+                i < thresholds.length - 1 ? (thresholds[i + 1].pressure ?? 25) - 1 : null;
               if (next !== null) {
-                lines.push(`**${p}–${next}** → ${t.action}`);
+                lines.push(
+                  t(lang, "embed.config.pressureMap.actionRange", {
+                    start: p,
+                    end: next,
+                    action: th.action,
+                  }),
+                );
               } else {
-                lines.push(`**${p}+** → ${t.action}`);
+                lines.push(
+                  t(lang, "embed.config.pressureMap.actionPlus", { start: p, action: th.action }),
+                );
               }
             }
             return lines.join("\n");
@@ -612,7 +693,7 @@ async function handleConfigCommand(interaction, db) {
   }
 
   await interaction.reply({
-    content: "Unknown subcommand.",
+    content: t(lang, "reply.unknownSubcommand"),
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -624,6 +705,7 @@ async function handleConfigCommand(interaction, db) {
  * @param {import('better-sqlite3').Database} db
  */
 async function handleActionsCommand(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "appeal") {
@@ -633,11 +715,12 @@ async function handleActionsCommand(interaction, db) {
       `INSERT INTO GuildConfiguration (guild_id, appeal_link)
        VALUES (?, ?)
        ON CONFLICT(guild_id)
-       DO UPDATE SET appeal_link = ?`,
+        DO UPDATE SET appeal_link = ?`,
     ).run(interaction.guildId, message, message);
+    invalidateCache();
 
     await interaction.reply({
-      content: "Appeal contact updated.",
+      content: t(lang, "reply.actions.appeal"),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -650,11 +733,12 @@ async function handleActionsCommand(interaction, db) {
       `INSERT INTO GuildConfiguration (guild_id, rejoin_link)
        VALUES (?, ?)
        ON CONFLICT(guild_id)
-       DO UPDATE SET rejoin_link = ?`,
+        DO UPDATE SET rejoin_link = ?`,
     ).run(interaction.guildId, link, link);
+    invalidateCache();
 
     await interaction.reply({
-      content: "Rejoin link updated.",
+      content: t(lang, "reply.actions.rejoin"),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -667,15 +751,13 @@ async function handleActionsCommand(interaction, db) {
 
     if (!interaction.memberPermissions?.has("BanMembers")) {
       await interaction.reply({
-        content: "You need Ban Members permission.",
+        content: t(lang, "reply.actions.ban.noPermission"),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    const member = await interaction.guild.members
-      .fetch(user.id)
-      .catch(() => null);
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
     if (member) {
       await member.ban({
         deleteMessageSeconds: deleteSeconds,
@@ -685,11 +767,12 @@ async function handleActionsCommand(interaction, db) {
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] <@${user.id}> banned by <@${interaction.user.id}>${hours > 0 ? `, delete ${hours}h` : ""}`,
+      `${LOG_TAG} <@${user.id}> banned by <@${interaction.user.id}>${hours > 0 ? `, delete ${hours}h` : ""}`,
     );
 
+    const hoursSuffix = hours > 0 ? t(lang, "reply.actions.ban.hoursSuffix", { hours }) : "";
     await interaction.reply({
-      content: `Banned ${user.tag}${hours > 0 ? ` (msgs from last ${hours}h deleted)` : ""}.`,
+      content: t(lang, "reply.actions.ban.success", { userTag: user.tag, hoursSuffix }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -703,7 +786,7 @@ async function handleActionsCommand(interaction, db) {
 
     if (members.size === 0) {
       await interaction.reply({
-        content: "No cached members to scan. Try again when more are cached.",
+        content: t(lang, "reply.actions.refresh.none"),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -726,29 +809,30 @@ async function handleActionsCommand(interaction, db) {
         continue;
       }
 
-      const profile = auditProfile(member);
+      const profile = auditProfile(member, lang);
       if (profile.reasons.length > 0 && profileEnabled) {
         flagged++;
         enqueue(
           "flag",
-          `[REFRESH] ${member.user.tag} (${member.id}): ${profile.reasons.join(", ")} (${profile.multiplier}x)`,
+          interaction.guildId,
+          `${LOG_TAG} ${t(lang, "telemetry.flag.refresh", { user: member.user.tag, userId: member.id, reasons: profile.reasons.join(", "), multiplier: profile.multiplier })}`,
         );
       }
     }
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] Manual refresh: scanned ${members.size} members, flagged ${flagged} with multipliers (by <@${interaction.user.id}>)`,
+      `${LOG_TAG} Manual refresh: scanned ${members.size} members, flagged ${flagged} with multipliers (by <@${interaction.user.id}>)`,
     );
 
     await interaction.editReply(
-      `Refresh complete. Scanned ${members.size} members, flagged **${flagged}** with multipliers.`,
+      t(lang, "reply.actions.refresh.complete", { count: members.size, flagged }),
     );
     return;
   }
 
   await interaction.reply({
-    content: "Unknown subcommand.",
+    content: t(lang, "reply.unknownSubcommand"),
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -760,6 +844,7 @@ async function handleActionsCommand(interaction, db) {
  * @param {import('better-sqlite3').Database} db
  */
 async function handleProfilesCommand(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
   const subcommand = interaction.options.getSubcommand();
 
   // /profiles list
@@ -771,15 +856,13 @@ async function handleProfilesCommand(interaction, db) {
       .all(interaction.guildId);
 
     const active = db
-      .prepare(
-        "SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?",
-      )
+      .prepare("SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?")
       .get(interaction.guildId);
 
     const { EmbedBuilder } = await import("discord.js");
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle("Configuration Profiles")
+      .setTitle(t(lang, "embed.profiles.list.title"))
       .setDescription(
         profiles.length > 0
           ? profiles
@@ -790,7 +873,7 @@ async function handleProfilesCommand(interaction, db) {
                 return `${marker}**${name}**${lock}`;
               })
               .join("\n")
-          : "No profiles. Use `/profiles create` to make one.",
+          : t(lang, "embed.profiles.list.empty"),
       );
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -800,13 +883,13 @@ async function handleProfilesCommand(interaction, db) {
   // /profiles current
   if (subcommand === "current") {
     const active = db
-      .prepare(
-        "SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?",
-      )
+      .prepare("SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?")
       .get(interaction.guildId);
 
     await interaction.reply({
-      content: `Active profile: **${active?.active_profile || "Standard"}**`,
+      content: t(lang, "reply.profiles.current", {
+        profileName: active?.active_profile || "Standard",
+      }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -817,14 +900,12 @@ async function handleProfilesCommand(interaction, db) {
     const name = interaction.options.getString("name", true);
 
     const existing = db
-      .prepare(
-        "SELECT profile_name FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?",
-      )
+      .prepare("SELECT profile_name FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?")
       .get(interaction.guildId, name);
 
     if (existing) {
       await interaction.reply({
-        content: `Profile **${name}** already exists.`,
+        content: t(lang, "reply.profiles.create.exists", { name }),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -835,14 +916,12 @@ async function handleProfilesCommand(interaction, db) {
       `INSERT INTO ConfigProfiles (guild_id, profile_name, profile_data, is_locked)
        VALUES (?, ?, ?, 0)`,
     ).run(interaction.guildId, name, JSON.stringify(data));
+    invalidateCache();
 
-    clog(
-      console.log,
-      `[src/events/interactionCreate.js] Profile "${name}" created by <@${interaction.user.id}>`,
-    );
+    clog(console.log, `${LOG_TAG} Profile "${name}" created by <@${interaction.user.id}>`);
 
     await interaction.reply({
-      content: `Profile **${name}** created.`,
+      content: t(lang, "reply.profiles.create.success", { name }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -857,14 +936,12 @@ async function handleProfilesCommand(interaction, db) {
       applyStandardProfile(interaction.guildId);
     } else {
       const row = db
-        .prepare(
-          "SELECT profile_data FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?",
-        )
+        .prepare("SELECT profile_data FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?")
         .get(interaction.guildId, name);
 
       if (!row) {
         await interaction.reply({
-          content: `Profile **${name}** not found.`,
+          content: t(lang, "reply.profiles.apply.notFound", { name }),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -879,14 +956,12 @@ async function handleProfilesCommand(interaction, db) {
        VALUES (?, ?)
        ON CONFLICT(guild_id) DO UPDATE SET active_profile = ?`,
     ).run(interaction.guildId, name, name);
+    invalidateCache();
 
-    clog(
-      console.log,
-      `[src/events/interactionCreate.js] Profile "${name}" applied by <@${interaction.user.id}>`,
-    );
+    clog(console.log, `${LOG_TAG} Profile "${name}" applied by <@${interaction.user.id}>`);
 
     await interaction.reply({
-      content: `Profile **${name}** applied.`,
+      content: t(lang, "reply.profiles.apply.success", { name }),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -895,9 +970,7 @@ async function handleProfilesCommand(interaction, db) {
   // /profiles export
   if (subcommand === "export") {
     const data = snapshotConfig(db, interaction.guildId);
-    const encoded = Buffer.from(JSON.stringify(data), "utf8").toString(
-      "base64",
-    );
+    const encoded = Buffer.from(JSON.stringify(data), "utf8").toString("base64");
 
     await interaction.reply({
       content: `\`\`\`\n${encoded}\n\`\`\``,
@@ -916,7 +989,7 @@ async function handleProfilesCommand(interaction, db) {
       data = JSON.parse(json);
     } catch {
       await interaction.reply({
-        content: "Invalid encoded config.",
+        content: t(lang, "reply.profiles.import.invalid"),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -925,9 +998,13 @@ async function handleProfilesCommand(interaction, db) {
     const { EmbedBuilder } = await import("discord.js");
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle("Import Configuration")
+      .setTitle(t(lang, "embed.profiles.import.title"))
       .setDescription(
-        `Found: ${data.modules?.length || 0} modules, ${data.thresholds?.length || 0} thresholds, ${data.regex?.length || 0} regex rules.\nSave as a profile using **/profiles create**.`,
+        t(lang, "embed.profiles.import.description", {
+          modules: data.modules?.length || 0,
+          thresholds: data.thresholds?.length || 0,
+          regex: data.regex?.length || 0,
+        }),
       );
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
@@ -939,14 +1016,12 @@ async function handleProfilesCommand(interaction, db) {
     const name = interaction.options.getString("name", true);
 
     const row = db
-      .prepare(
-        "SELECT is_locked FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?",
-      )
+      .prepare("SELECT is_locked FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?")
       .get(interaction.guildId, name);
 
     if (!row) {
       await interaction.reply({
-        content: `Profile **${name}** not found.`,
+        content: t(lang, "reply.profiles.remove.notFound", { name }),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -954,42 +1029,40 @@ async function handleProfilesCommand(interaction, db) {
 
     if (row.is_locked) {
       await interaction.reply({
-        content: `Profile **${name}** is locked and cannot be removed.`,
+        content: t(lang, "reply.profiles.remove.locked", { name }),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    db.prepare(
-      "DELETE FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?",
-    ).run(interaction.guildId, name);
+    db.prepare("DELETE FROM ConfigProfiles WHERE guild_id = ? AND profile_name = ?").run(
+      interaction.guildId,
+      name,
+    );
+    invalidateCache();
 
     const active = db
-      .prepare(
-        "SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?",
-      )
+      .prepare("SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?")
       .get(interaction.guildId);
 
     if (active?.active_profile === name) {
-      db.prepare(
-        "UPDATE GuildConfiguration SET active_profile = NULL WHERE guild_id = ?",
-      ).run(interaction.guildId);
+      db.prepare("UPDATE GuildConfiguration SET active_profile = NULL WHERE guild_id = ?").run(
+        interaction.guildId,
+      );
     }
+    invalidateCache();
 
-    clog(
-      console.log,
-      `[src/events/interactionCreate.js] Profile "${name}" removed by <@${interaction.user.id}>`,
-    );
+    clog(console.log, `${LOG_TAG} Profile "${name}" removed by <@${interaction.user.id}>`);
 
     await interaction.reply({
-      content: `Profile **${name}** removed.`,
+      content: t(lang, "reply.profiles.remove.success", { name }),
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   await interaction.reply({
-    content: "Unknown subcommand.",
+    content: t(lang, "reply.unknownSubcommand"),
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -1001,6 +1074,7 @@ async function handleProfilesCommand(interaction, db) {
  * @param {import('better-sqlite3').Database} db
  */
 async function handleRaidCommand(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "stage") {
@@ -1011,13 +1085,13 @@ async function handleRaidCommand(interaction, db) {
 
     clog(
       console.log,
-      `[src/events/interactionCreate.js] Raid stage ${stage} set ${result ? "successfully" : "FAILED"} by <@${interaction.user.id}>`,
+      `${LOG_TAG} Raid stage ${stage} set ${result ? "successfully" : "FAILED"} by <@${interaction.user.id}>`,
     );
 
     await interaction.reply({
       content: result
-        ? `Raid mode set to **Stage ${stage}**.`
-        : `Failed to set raid stage. Check bot permissions.`,
+        ? t(lang, "reply.raid.stage.success", { stage })
+        : t(lang, "reply.raid.stage.failed"),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1028,14 +1102,17 @@ async function handleRaidCommand(interaction, db) {
     const stage = getRaidStage(interaction.guildId);
 
     await interaction.reply({
-      content: `Current raid stage: **Stage ${stage}**${stage === 0 ? " (inactive)" : ""}`,
+      content: t(lang, "reply.raid.status", {
+        stage,
+        inactive: stage === 0 ? t(lang, "reply.raid.status.inactive") : "",
+      }),
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   await interaction.reply({
-    content: "Unknown subcommand.",
+    content: t(lang, "reply.unknownSubcommand"),
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -1047,6 +1124,7 @@ async function handleRaidCommand(interaction, db) {
  * @param {import('better-sqlite3').Database} db
  */
 async function handleDebugCommand(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
   const { EmbedBuilder } = await import("discord.js");
   const { getAllPressureScores } = await import("../core/pressureEngine.js");
   const { getRaidStage } = await import("../modules/raidProtection.js");
@@ -1057,14 +1135,10 @@ async function handleDebugCommand(interaction, db) {
     .all(interaction.guildId);
 
   const thresholds = db
-    .prepare(
-      "SELECT * FROM ThresholdActions WHERE guild_id = ? ORDER BY pressure_tier",
-    )
+    .prepare("SELECT * FROM ThresholdActions WHERE guild_id = ? ORDER BY pressure_tier")
     .all(interaction.guildId);
 
-  const regex = db
-    .prepare("SELECT * FROM RegexRules WHERE guild_id = ?")
-    .all(interaction.guildId);
+  const regex = db.prepare("SELECT * FROM RegexRules WHERE guild_id = ?").all(interaction.guildId);
 
   const config = db
     .prepare("SELECT * FROM GuildConfiguration WHERE guild_id = ?")
@@ -1074,9 +1148,7 @@ async function handleDebugCommand(interaction, db) {
     .prepare("SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?")
     .get(interaction.guildId);
 
-  const allPressure = getAllPressureScores().filter(
-    (p) => p.guildId === interaction.guildId,
-  );
+  const allPressure = getAllPressureScores().filter((p) => p.guildId === interaction.guildId);
 
   const raidStage = getRaidStage(interaction.guildId);
   const telemetryQueued = getQueueLength();
@@ -1086,14 +1158,29 @@ async function handleDebugCommand(interaction, db) {
   const lines = [];
 
   lines.push(
-    "**𝖤𝖷𝖨𝖠 Debug**",
-    `Profile: **${activeProfile?.active_profile || "Standard"}**`,
-    `Raid: **Stage ${raidStage}**${raidStage === 0 ? " (inactive)" : " ⚠️ ACTIVE"}`,
-    `Members: **${memberCount}**`,
-    `Queue: **${telemetryQueued}** pending`,
-    `Uptime: **${Math.floor(uptimeSec / 3600)}h ${Math.floor((uptimeSec % 3600) / 60)}m**`,
-    `Log Channel: ${config?.log_channel_id ? `<#${config.log_channel_id}>` : "Not set"}`,
-    `Honeypot: ${config?.honeypot_channel_id ? `<#${config.honeypot_channel_id}>` : "Not set"}`,
+    t(lang, "embed.debug.title"),
+    t(lang, "embed.debug.profile", { profileName: activeProfile?.active_profile || "Standard" }),
+    t(lang, "embed.debug.raid", {
+      stage: raidStage,
+      active:
+        raidStage === 0 ? t(lang, "embed.debug.raid.inactive") : t(lang, "embed.debug.raid.active"),
+    }),
+    t(lang, "embed.debug.members", { count: memberCount }),
+    t(lang, "embed.debug.queue", { count: telemetryQueued }),
+    t(lang, "embed.debug.uptime", {
+      hours: Math.floor(uptimeSec / 3600),
+      minutes: Math.floor((uptimeSec % 3600) / 60),
+    }),
+    t(lang, "embed.debug.logChannel", {
+      channel: config?.log_channel_id
+        ? `<#${config.log_channel_id}>`
+        : t(lang, "embed.debug.notSet"),
+    }),
+    t(lang, "embed.debug.honeypot", {
+      channel: config?.honeypot_channel_id
+        ? `<#${config.honeypot_channel_id}>`
+        : t(lang, "embed.debug.notSet"),
+    }),
     "",
   );
 
@@ -1102,68 +1189,95 @@ async function handleDebugCommand(interaction, db) {
   for (const m of modules) {
     moduleMap[m.module_name] = m;
   }
-  lines.push("**Modules**");
+  lines.push(t(lang, "embed.debug.modules"));
   for (const name of allModuleNames) {
     const m = moduleMap[name];
     if (!m) {
-      lines.push(`  ${name} → w:0 crit:0 en:0 (absent)`);
+      lines.push(
+        t(lang, "embed.debug.moduleLine.unknown", { name, weight: 0, critical: 0, enabled: 0 }),
+      );
     } else if (name === "regex") {
       const ruleWeights = regex.map((r) => r.threat_weight);
       const weightDisplay =
-        ruleWeights.length > 0
-          ? `${Math.min(...ruleWeights)}~${Math.max(...ruleWeights)}`
-          : "0";
+        ruleWeights.length > 0 ? `${Math.min(...ruleWeights)}~${Math.max(...ruleWeights)}` : "0";
       lines.push(
-        `  ${m.module_name} → w:${weightDisplay} crit:${m.is_critical} en:${m.is_enabled}`,
+        t(lang, "embed.debug.moduleLine.regex", {
+          name: m.module_name,
+          weightDisplay,
+          critical: m.is_critical,
+          enabled: m.is_enabled,
+        }),
       );
     } else if (name === "user_profile") {
       lines.push(
-        `  ${m.module_name} → tiers:1.0/1.2/1.5/2.0 crit:${m.is_critical} en:${m.is_enabled}`,
+        t(lang, "embed.debug.moduleLine.profile", {
+          name: m.module_name,
+          critical: m.is_critical,
+          enabled: m.is_enabled,
+        }),
       );
     } else {
       lines.push(
-        `  ${m.module_name} → w:${m.weight} crit:${m.is_critical} en:${m.is_enabled}`,
+        t(lang, "embed.debug.moduleLine.normal", {
+          name: m.module_name,
+          weight: m.weight,
+          critical: m.is_critical,
+          enabled: m.is_enabled,
+        }),
       );
     }
   }
   lines.push("");
 
   if (thresholds.length > 0) {
-    lines.push("**Thresholds**");
-    for (const t of thresholds) {
+    lines.push(t(lang, "embed.debug.thresholds"));
+    for (const th of thresholds) {
       lines.push(
-        `  Tier ${t.pressure_tier} → ≥${t.pressure} ${t.action} (del:${t.message_delete_seconds}s)`,
+        t(lang, "embed.debug.thresholdLine", {
+          tier: th.pressure_tier,
+          pressure: th.pressure,
+          action: th.action,
+          deleteSec: th.message_delete_seconds,
+        }),
       );
     }
     lines.push("");
   }
 
   if (regex.length > 0) {
-    lines.push("**Regex Rules**");
+    lines.push(t(lang, "embed.debug.regexRules"));
     for (const r of regex) {
       lines.push(
-        `  ${r.rule_identifier} → w:${r.threat_weight} crit:${r.is_critical}`,
+        t(lang, "embed.debug.regexLine", {
+          identifier: r.rule_identifier,
+          weight: r.threat_weight,
+          critical: r.is_critical,
+        }),
       );
     }
     lines.push("");
   }
 
   if (allPressure.length > 0) {
-    lines.push("**Active Pressure Scores**");
+    lines.push(t(lang, "embed.debug.pressureScores"));
     for (const p of allPressure) {
       const elapsed = Date.now() - p.lastUpdated;
       lines.push(
-        `  <@${p.userId}> → ${p.pressure}p (last: ${Math.floor(elapsed / 1000)}s ago)`,
+        t(lang, "embed.debug.pressureLine", {
+          userId: p.userId,
+          pressure: p.pressure,
+          seconds: Math.floor(elapsed / 1000),
+        }),
       );
     }
   } else {
-    lines.push("**Active Pressure Scores**\n  (none)");
+    lines.push(t(lang, "embed.debug.pressureNone"));
   }
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: `/config view for human-readable display` });
+    .setFooter({ text: t(lang, "embed.debug.footer") });
 
   await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
@@ -1205,12 +1319,8 @@ function snapshotConfig(db, guildId) {
  * @param {{ modules: object[], thresholds: object[], regex: object[], guildConfig: object|null }} data
  */
 function restoreConfig(db, guildId, data) {
-  const clearModule = db.prepare(
-    "DELETE FROM ModuleWeights WHERE guild_id = ?",
-  );
-  const clearThresholds = db.prepare(
-    "DELETE FROM ThresholdActions WHERE guild_id = ?",
-  );
+  const clearModule = db.prepare("DELETE FROM ModuleWeights WHERE guild_id = ?");
+  const clearThresholds = db.prepare("DELETE FROM ThresholdActions WHERE guild_id = ?");
   const clearRegex = db.prepare("DELETE FROM RegexRules WHERE guild_id = ?");
 
   const insModule = db.prepare(
@@ -1248,15 +1358,10 @@ function restoreConfig(db, guildId, data) {
 
     clearRegex.run(guildId);
     for (const r of data.regex || []) {
-      insRegex.run(
-        guildId,
-        r.rule_identifier,
-        r.pattern,
-        r.threat_weight,
-        r.is_critical,
-      );
+      insRegex.run(guildId, r.rule_identifier, r.pattern, r.threat_weight, r.is_critical);
     }
   });
 
   transaction();
+  invalidateCache();
 }

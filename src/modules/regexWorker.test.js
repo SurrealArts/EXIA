@@ -1,88 +1,70 @@
 import { describe, it, expect } from "vitest";
-import { Worker } from "node:worker_threads";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { evaluateRegex } from "./regexSandbox.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const workerPath = path.resolve(__dirname, "regexWorker.js");
-
-function runWorker(pattern, content) {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(workerPath, { workerData: { pattern, content } });
-    worker.on("message", resolve);
-    worker.on("error", reject);
-    worker.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Worker exited with code ${code}`));
-      }
-    });
-  });
-}
-
-describe("regexWorker.js", () => {
+describe("regexWorker (via evaluateRegex)", () => {
   it("returns matched=true for matching pattern", async () => {
-    const result = await runWorker("hello", "hello world");
+    const result = await evaluateRegex("hello", "hello world");
     expect(result.matched).toBe(true);
   });
 
   it("returns matched=false for non-matching pattern", async () => {
-    const result = await runWorker("hello", "goodbye world");
+    const result = await evaluateRegex("hello", "goodbye world");
     expect(result.matched).toBe(false);
   });
 
   it("matches case-insensitively", async () => {
-    const result = await runWorker("HELLO", "Say hello world");
+    const result = await evaluateRegex("HELLO", "Say hello world");
     expect(result.matched).toBe(true);
   });
 
   it("handles regex special characters", async () => {
-    const result = await runWorker("\\d{3}", "code: 123");
+    const result = await evaluateRegex("\\d{3}", "code: 123");
     expect(result.matched).toBe(true);
   });
 
   it("handles non-matching special characters", async () => {
-    const result = await runWorker("\\d{5}", "code: 123");
+    const result = await evaluateRegex("\\d{5}", "code: 123");
     expect(result.matched).toBe(false);
   });
 
   it("handles anchors", async () => {
-    const r1 = await runWorker("^hello", "hello world");
+    const r1 = await evaluateRegex("^hello", "hello world");
     expect(r1.matched).toBe(true);
 
-    const r2 = await runWorker("^hello", "say hello");
+    const r2 = await evaluateRegex("^hello", "say hello");
     expect(r2.matched).toBe(false);
   });
 
   it("matches with global flag (g) implicitly added", async () => {
-    const result = await runWorker("a", "aaa");
+    const result = await evaluateRegex("a", "aaa");
     expect(result.matched).toBe(true);
   });
 
   it("returns matched=true + fastTrack for invalid regex pattern", async () => {
-    const result = await runWorker("[invalid", "any content");
+    const result = await evaluateRegex("[invalid", "any content");
     expect(result.matched).toBe(true);
     expect(result.fastTrack).toBe(true);
     expect(result.error).toBeDefined();
   });
 
   it("matches alternation patterns", async () => {
-    const r1 = await runWorker("spam|phish", "this is spam");
+    const r1 = await evaluateRegex("spam|phish", "this is spam");
     expect(r1.matched).toBe(true);
 
-    const r2 = await runWorker("spam|phish", "this is phish");
+    const r2 = await evaluateRegex("spam|phish", "this is phish");
     expect(r2.matched).toBe(true);
 
-    const r3 = await runWorker("spam|phish", "this is clean");
+    const r3 = await evaluateRegex("spam|phish", "this is clean");
     expect(r3.matched).toBe(false);
   });
 
   it("matches content with newlines", async () => {
-    const result = await runWorker("line2", "line1\nline2\nline3");
+    const result = await evaluateRegex("line2", "line1\nline2\nline3");
     expect(result.matched).toBe(true);
   });
 
   it("does not match empty pattern against non-empty content (no match)", async () => {
-    const result = await runWorker("(?!)", "anything");
+    const result = await evaluateRegex("(?!)", "anything");
     expect(result.matched).toBe(false);
   });
 });

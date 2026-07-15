@@ -5,11 +5,7 @@ const LONG_TIMEOUT = { timeout: 5000 };
 
 describe("evaluateRegex", () => {
   it("returns matched=true when pattern matches content", async () => {
-    const result = await evaluateRegex(
-      "spam",
-      "this is spam message",
-      LONG_TIMEOUT,
-    );
+    const result = await evaluateRegex("spam", "this is spam message", LONG_TIMEOUT);
     expect(result.matched).toBe(true);
     expect(result.fastTrack).toBe(false);
   });
