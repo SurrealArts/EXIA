@@ -14,7 +14,7 @@
 3. [Core Engine](#3-core-engine)
    - 3.1 Database (`src/core/database.js`)
    - 3.2 Pressure Engine (`src/core/pressureEngine.js`)
-   - 3.3 Logger (`src/core/logger.js`)
+   - 3.3 Locale (`src/core/locale.js`)
    - 3.4 Configuration (`src/config/config.js`)
 4. [Events](#4-events)
    - 4.1 Message Create (`src/events/messageCreate.js`)
@@ -33,9 +33,11 @@
    - 6.3 Profiles (`src/commands/profiles.js`)
    - 6.4 Raid (`src/commands/raid.js`)
    - 6.5 Debug (`src/commands/debug.js`)
+   - 6.6 Language (`src/commands/language.js`)
 7. [Utilities](#7-utilities)
    - 7.1 CLOG (`src/utils/clog.js`)
    - 7.2 Telemetry Queue (`src/utils/telemetryQueue.js`)
+   - 7.3 Query Cache (`src/utils/queryCache.js`)
 8. [Communication Flow](#8-communication-flow)
 9. [Running the Application](#9-running-the-application)
 
@@ -50,19 +52,23 @@ EXIA/
 │   │   └── docker-image.yml          # GitHub Actions: Docker build + push to ghcr.io
 │   └── dependabot.yml                # Weekly npm + Docker dependency updates
 ├── data/                             # SQLite database directory (gitignored)
+├── scripts/
+│   └── bump-version.js               # Version bump script
 ├── src/
 │   ├── index.js                      # Entry point: client init, command registration, auto-refresh
 │   ├── commands/
 │   │   ├── appeals.js                # /actions command builder (appeal, rejoin, ban, refresh)
 │   │   ├── configuration.js          # /config command builder (modules, thresholds, regex, etc.)
 │   │   ├── debug.js                  # /debug command builder
+│   │   ├── language.js               # /language command builder
 │   │   ├── profiles.js               # /profiles command builder (list, create, apply, etc.)
 │   │   └── raid.js                   # /raid command builder (stage, status)
 │   ├── config/
 │   │   └── config.js                 # dotenv-flow loader, env validation, exports
 │   ├── core/
 │   │   ├── database.js               # SQLite init, 7 tables, migrations, Standard profile
-│   │   ├── logger.js                 # Pino structured logger (file descriptor 1)
+│   │   ├── locale.js                 # i18n: t(), getGuildLanguage(), resolveInteractionLang()
+│   │   ├── locale.test.js            # Vitest suite for locale
 │   │   ├── pressureEngine.js         # In-memory pressure scores, decay, mutex, fast-track
 │   │   └── pressureEngine.test.js    # Vitest suite for pressure engine
 │   ├── events/
@@ -70,33 +76,47 @@ EXIA/
 │   │   ├── interactionCreate.js      # All slash command routing + autocomplete + debug
 │   │   ├── messageCreate.js          # Full message pipeline: modules, multiplier, sanctions
 │   │   └── modalSubmit.js            # Regex create/edit modal handling
+│   ├── locales/
+│   │   ├── en.json                   # English locale strings
+│   │   └── ja.json                   # Japanese locale strings
 │   ├── modules/
 │   │   ├── honeypotTrap.js           # Fast-track ban on restricted channel messages
 │   │   ├── honeypotTrap.test.js      # Vitest suite for honeypot
 │   │   ├── raidProtection.js         # 3-stage raid escalation, permission backup/restore
+│   │   ├── raidProtection.test.js    # Vitest suite for raid protection
 │   │   ├── regexSandbox.js           # Worker-thread regex evaluation with timeout
 │   │   ├── regexSandbox.test.js      # Vitest suite for regex sandbox
 │   │   ├── regexWorker.js            # Worker thread: receives {pattern, content}, returns {matched}
+│   │   ├── regexWorker.test.js       # Vitest suite for regex worker
 │   │   ├── userProfile.js            # Account age/avatar audit → {multiplier, reasons}
 │   │   ├── userProfile.test.js       # Vitest suite for user profile
 │   │   ├── velocityBucket.js         # Token-bucket rate limiter + multi-channel detection
 │   │   └── velocityBucket.test.js    # Vitest suite for velocity bucket
 │   └── utils/
 │       ├── clog.js                   # Timestamped colored console logging utility
+│       ├── queryCache.js             # TTL-based query cache with LRU eviction
+│       ├── queryCache.test.js        # Vitest suite for query cache
 │       ├── telemetryQueue.js         # Batched embed log queue + flusher
 │       └── telemetryQueue.test.js    # Vitest suite for telemetry queue
 ├── .dockerignore                     # Docker build exclusion patterns
 ├── .env.example                      # Required environment variables template
 ├── .gitignore                        # Git exclusion patterns
-├── Dockerfile                        # Multi-stage Docker build (build → final slim)
-├── DOCUMENTATION.md                  # This file
-├── README.md                         # User-facing intro and deployment guide
+├── .prettierignore                   # Prettier exclusion patterns
+├── .prettierrc.json                  # Prettier config
+├── CHANGELOG.ja.md                   # Japanese changelog
+├── CHANGELOG.md                      # Version changelog
 ├── docker-compose.yml                # Single-service compose with named volume
+├── Dockerfile                        # Multi-stage Docker build (build → final slim)
+├── DOCUMENTATION.ja.md               # Japanese documentation
+├── DOCUMENTATION.md                  # This file
 ├── entrypoint.sh                     # Container entrypoint: creates /app/data, runs CMD
 ├── eslint.config.js                  # ESLint flat config
+├── LICENSE                           # MIT License
 ├── package.json                      # Project manifest, scripts, dependencies
 ├── pnpm-lock.yaml                    # Lockfile
-└── pnpm-workspace.yaml               # Pnpm workspace config (single project)
+├── pnpm-workspace.yaml               # Pnpm workspace config (single project)
+├── README.ja.md                      # Japanese user-facing guide
+└── README.md                         # User-facing intro and deployment guide
 ```
 
 ---
@@ -116,7 +136,7 @@ EXIA/
 | `discord.js`     | ^14.26.5 | Discord API client + interaction framework                |
 | `better-sqlite3` | ^12.11.1 | Synchronous SQLite3 binding (WAL mode)                    |
 | `dotenv-flow`    | ^4.1.0   | `.env` loading with environment-specific override support |
-| `pino`           | ^10.3.1  | Structured JSON logger (used as secondary logger)         |
+| `pino`           | ^10.3.1  | Structured JSON logger (removed in v1.1.0)                |
 
 ### Dev Dependencies
 
@@ -125,6 +145,7 @@ EXIA/
 | `eslint` ^10.7.0  | Linting (flat config) |
 | `prettier` ^3.9.5 | Code formatting       |
 | `vitest` ^4.1.10  | Test runner           |
+| `globals` ^17.7.0 | ESLint globals        |
 
 ### Scripts
 
@@ -268,11 +289,32 @@ const processingMutex = new Set();
 | `getAllPressureScores()`                | Returns `[{ guildId, userId, pressure, lastUpdated }]` for debugging |
 | `resetPressureState()`                  | Clears all state, stops decay timer (used by tests)                  |
 
-### 3.3 Logger (`src/core/logger.js`)
+### 3.3 Locale (`src/core/locale.js`)
 
-Pino structured JSON logger, writing to stdout (file descriptor 1). Log level configurable via `LOG_LEVEL` env var (default `"info"`). Uses ISO timestamp format.
+i18n system providing per-guild language support. Locale files are stored in `src/locales/` as JSON key-value maps.
 
-The primary logging utility is `clog()` (see §7.1); Pino is available as a secondary structured logger.
+#### Key Exports
+
+| Export                     | Description                                                           |
+| -------------------------- | --------------------------------------------------------------------- |
+| `t(lang, key, vars?)`      | Translate a key for the given language, optionally interpolating vars |
+| `getGuildLanguage(db, id)` | Get the configured language for a guild (default `"en"`)              |
+| `resolveInteractionLang()` | Resolve language from interaction (guild setting or user locale)      |
+
+#### Translation
+
+```js
+t("ja", "telemetry.flag.refresh", {
+  user: "<@123>",
+  userId: "123",
+  reasons: "spam",
+  multiplier: 2.0,
+});
+```
+
+- Falls back to key if translation is missing
+- Interpolates `{{var}}` placeholders with supplied variables
+- Supported locales: `en` (English), `ja` (Japanese)
 
 ### 3.4 Configuration (`src/config/config.js`)
 
@@ -385,6 +427,7 @@ Routes all slash commands, autocomplete interactions, and the debug handler.
 | Autocomplete  | `handleAutocomplete`    |
 | `/config *`   | `handleConfigCommand`   |
 | `/actions *`  | `handleActionsCommand`  |
+| `/language`   | `handleLanguageCommand` |
 | `/profiles *` | `handleProfilesCommand` |
 | `/raid *`     | `handleRaidCommand`     |
 | `/debug`      | `handleDebugCommand`    |
@@ -740,6 +783,16 @@ Slash command builder: `/debug` (no permission restriction).
 
 Returns a full system state embed showing modules, thresholds, regex rules, active pressure scores, raid state, telemetry queue length, uptime, and member count.
 
+### 6.6 Language (`src/commands/language.js`)
+
+Slash command builder: `/language` (Administrator permission required).
+
+```
+/language <language>
+```
+
+Language choices: `en` (English), `ja` (日本語). Persists the guild's language preference to the database. All subsequent embeds and telemetry use the selected language.
+
 ---
 
 ## 7. Utilities
@@ -791,6 +844,20 @@ Adds an entry to the named queue. Silently ignores invalid categories.
 #### `getQueueLength()`
 
 Returns total pending entries across all queues (used by /debug).
+
+### 7.3 Query Cache (`src/utils/queryCache.js`)
+
+TTL-based in-memory query cache for database reads. Reduces redundant SQLite queries on hot paths.
+
+| Export              | Description                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `cachedGet(db, fn)` | Execute `fn(db)` and cache result by function identity + DB state |
+| `cachedAll(db, fn)` | Same as `cachedGet` but for multi-row results                     |
+| `invalidateCache()` | Clear all cached entries                                          |
+
+- **Max entries:** 10,000 (oldest evicted via `evictIfNeeded()`)
+- **TTL:** 5 minutes per entry
+- Used by: `messageCreate.js` (module weights, thresholds), `interactionCreate.js` (guild config), `guildMemberAdd.js` (module weight check)
 
 ---
 
@@ -851,6 +918,7 @@ isAutocomplete?
     ├── Yes → switch(interaction.commandName)
     │   ├── "config"    → handleConfigCommand(interaction, db)
     │   ├── "actions"   → handleActionsCommand(interaction, db)
+    │   ├── "language"  → handleLanguageCommand(interaction, db)
     │   ├── "profiles"  → handleProfilesCommand(interaction, db)
     │   ├── "raid"      → handleRaidCommand(interaction, db)
     │   └── "debug"     → handleDebugCommand(interaction, db)
@@ -904,7 +972,7 @@ pnpm dev
 docker compose up -d --build
 ```
 
-The bot registers 5 slash commands globally on `ClientReady`. SQLite data persists in the `exia_data` named volume.
+The bot registers 6 slash commands globally on `ClientReady`. SQLite data persists in the `exia_data` named volume.
 
 ### Testing
 
@@ -914,7 +982,7 @@ pnpm test:watch    # Watch mode
 pnpm lint          # Prettier check + ESLint
 ```
 
-Current test suites (61 tests total):
+Current test suites (110 tests total):
 
 - `pressureEngine.test.js` — applyPressure, decay, mutex, fast-track, multi-guild isolation
 - `velocityBucket.test.js` — token consumption, refill, multi-channel detection, auto-removal
@@ -922,6 +990,9 @@ Current test suites (61 tests total):
 - `honeypotTrap.test.js` — channel detection, admin whitelist, no-config case
 - `userProfile.test.js` — multiplier tiers, reason generation
 - `telemetryQueue.test.js` — enqueue, flush, chunking, field limits
+- `locale.test.js` — translation, fallback, interpolation, guild language resolution
+- `queryCache.test.js` — caching, eviction, invalidation
+- `raidProtection.test.js` — stage transitions, auto-detection, permission backup/restore, spike window
 
 ### Shutdown
 

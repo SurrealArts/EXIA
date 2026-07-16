@@ -17,6 +17,7 @@ Personal notes at the end of the README file.
 
 ## Features
 
+- **i18n / Multi-Language:** Built-in locale system with per-guild language selection via `/language`; Japanese and English supported
 - **Raid Protection:** Automatic escalation (3 stages) based on sanction spike thresholds; manual override via `/raid`
 - **Pressure System:** Per-user/guild in-memory pressure scores with 60-second decay cycle; fast-track (instant ban) on critical module triggers
 - **Configuration Profiles:** Snapshot, restore, export, and import full guild configs — Standard profile applied automatically on first use
@@ -77,10 +78,11 @@ LOG_TIMEZONE=UTC
 docker compose up -d --build
 ```
 
-The bot registers 5 slash commands globally on startup:
+The bot registers 6 slash commands globally on startup:
 
 - `/config` — Manage modules, thresholds, regex rules, honeypot, log channel, and view config
 - `/actions` — Appeal/rejoin links, manual ban, refresh member scan
+- `/language` — Set the guild's preferred language
 - `/profiles` — Create, list, apply, export, import, and remove config profiles (Standard locked)
 - `/raid` — Set raid stage (0–3), check current status
 - `/debug` — Full system state: modules, thresholds, active pressure scores, telemetry queue
