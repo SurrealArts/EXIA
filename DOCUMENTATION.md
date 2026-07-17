@@ -1,6 +1,6 @@
 # EXIA — Full Project Documentation
 
-**Version:** 1.1.0  
+**Version:** 1.2.1  
 **Stack:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL mode)  
 **Package Manager:** pnpm 11.12 (ESM-only)  
 **Entry Point:** `src/index.js`
@@ -139,7 +139,7 @@ EXIA/
 | `discord.js`     | ^14.26.5 | Discord API client + interaction framework                |
 | `better-sqlite3` | ^12.11.1 | Synchronous SQLite3 binding (WAL mode)                    |
 | `dotenv-flow`    | ^4.1.0   | `.env` loading with environment-specific override support |
-| `pino`           | ^10.3.1  | Structured JSON logger (removed in v1.1.0)                |
+| `pino`           | ^10.3.1  | Structured JSON logger (removed in v1.2.1)                |
 
 ### Dev Dependencies
 
@@ -760,11 +760,11 @@ The multiplier is **independent** of the user_profile multiplier — profile_mul
 
 #### Constants
 
-| Constant                  | Value | Description                                   |
-| ------------------------- | ----- | --------------------------------------------- |
-| `MENTION_BASE_MULTIPLIER` | 3.0   | Starting multiplier on first mention          |
-| `MAX_MENTION_MULTIPLIER`  | 5.0   | Cap for repeat offenders                      |
-| `CLEAN_DECAY_PER_MESSAGE` | 0.1   | Base decay per clean message, scaled by streak|
+| Constant                  | Value | Description                                    |
+| ------------------------- | ----- | ---------------------------------------------- |
+| `MENTION_BASE_MULTIPLIER` | 3.0   | Starting multiplier on first mention           |
+| `MAX_MENTION_MULTIPLIER`  | 5.0   | Cap for repeat offenders                       |
+| `CLEAN_DECAY_PER_MESSAGE` | 0.1   | Base decay per clean message, scaled by streak |
 
 ---
 

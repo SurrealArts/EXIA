@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.1.0-blue)
+![version](https://img.shields.io/badge/version-1.2.1-blue)
 
 > **🌐 Language:** [English](README.md) · [日本語](README.ja.md)  
 > **📄 Documentation:** [English](DOCUMENTATION.md) · [日本語](DOCUMENTATION.ja.md)  
@@ -70,7 +70,7 @@ Create a `.env` file from `.env.example`:
 ```env
 CLIENT_ID=your_client_id
 TOKEN=your_bot_token
-VERSION=1.1.0
+VERSION=1.2.1
 
 LOG_WITH_TIME=true
 LOG_TIMEZONE=UTC

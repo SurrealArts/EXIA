@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { checkMentionGuard, getMentionMultiplier, getAllMentionState, resetMentionState } from "./mentionGuard.js";
+import {
+  checkMentionGuard,
+  getMentionMultiplier,
+  getAllMentionState,
+  resetMentionState,
+} from "./mentionGuard.js";
 
 const GUILD_ID = "guild_1";
 const USER_ID = "user_1";
@@ -12,12 +17,7 @@ const USER_ID = "user_1";
  * @param {string[]} opts.roleMentions - role names
  * @param {bigint} [opts.permissions] - member permissions bitfield
  */
-function makeMessage({
-  everyone = false,
-  here = false,
-  roleMentions = [],
-  permissions = 0n,
-} = {}) {
+function makeMessage({ everyone = false, here = false, roleMentions = [], permissions = 0n } = {}) {
   const roles = new Map();
   for (const name of roleMentions) {
     roles.set(name, { name });
@@ -33,8 +33,12 @@ function makeMessage({
     member: {
       permissions: {
         has(perm) {
-          if (typeof perm === "bigint") return (permissions & perm) === perm;
-          if (perm === "Administrator") return (permissions & 8n) === 8n;
+          if (typeof perm === "bigint") {
+            return (permissions & perm) === perm;
+          }
+          if (perm === "Administrator") {
+            return (permissions & 8n) === 8n;
+          }
           return false;
         },
       },
@@ -143,7 +147,7 @@ describe("checkMentionGuard", () => {
 
     // Second clean message: cleanStreak=2, decay = 2 * 0.1 = 0.2
     const clean2 = makeMessage();
-    const r2 = checkMentionGuard(clean2, "en");
+    checkMentionGuard(clean2, "en");
     expect(getMentionMultiplier(GUILD_ID, USER_ID)).toBeCloseTo(2.7);
   });
 

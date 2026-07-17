@@ -302,7 +302,7 @@ export function applyStandardProfile(guildId) {
         module_name: "velocity",
         weight: 10,
         is_critical: 0,
-        is_enabled: 1
+        is_enabled: 1,
       },
       {
         module_name: "honeypot",

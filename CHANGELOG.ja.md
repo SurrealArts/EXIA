@@ -7,6 +7,32 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-17
+
+### セキュリティ
+
+- `discord.js` を 14.26.5 から 14.27.0 に更新し、`undici` 6.27.0（以前は 6.24.1）にすることで 4 つの Dependabot 勧告を修正: GHSA-35p6-xmwp-9g52（レスポンスキュー Poisoning）、GHSA-vxpw-j846-p89q（WebSocket DoS）、GHSA-p88m-4jfj-68fv（ヘッダーインジェクション）、GHSA-g8m3-5g58-fq7m（Cookie SameSite ダウングレード）
+
+### 変更
+
+- ドキュメントとソースファイルにコードスタイルのフォーマットを適用（Prettier）
+
+## [1.2.0] - 2026-07-17
+
+### 追加
+
+- 新しい `mention_guard` モジュール: モデレーター以外のユーザーからの @everyone/@here/@role メンションを検出し、クリーンなメッセージで減衰する動的エスカレーション乗数（3.0x～5.0x）を適用
+- mentionGuard モジュールの 15 の単体テスト（合計テスト数: 125）
+- README.ja.md に Mention Guard セクションの日本語翻訳を追加
+
+### 変更
+
+- `/debug` コマンドに Administrator 権限が必要になりました（以前は制限なし）
+- Standard プロフィールを 4 モジュールから 5 モジュールに拡張（`mention_guard`、重み: 10）
+- パイプラインを拡張: メンションガードチェックを user_profile 監査の後、ベロシティチェックの前に追加
+- `/config view` と `/debug` で mention_guard の有効圧力範囲を表示
+- README と DOCUMENTATION（英語・日本語）のドキュメントを更新
+
 ## [1.1.0] - 2026-07-15
 
 ### Added
@@ -67,6 +93,8 @@
 - Docker イメージビルドとテストステップを含む CI/CD パイプライン
 - 自動依存関係更新のための Dependabot 設定
 
-[Unreleased]: https://github.com/anomalyco/exia/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/anomalyco/exia/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/anomalyco/exia/releases/tag/v1.2.1
+[1.2.0]: https://github.com/anomalyco/exia/releases/tag/v1.2.0
 [1.1.0]: https://github.com/anomalyco/exia/releases/tag/v1.1.0
 [1.0.0]: https://github.com/anomalyco/exia/releases/tag/v1.0.0

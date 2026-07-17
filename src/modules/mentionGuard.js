@@ -52,7 +52,10 @@ export function checkMentionGuard(message, lang) {
     if (entry) {
       const before = entry.multiplier;
       entry.cleanStreak++;
-      entry.multiplier = Math.max(1.0, entry.multiplier - entry.cleanStreak * CLEAN_DECAY_PER_MESSAGE);
+      entry.multiplier = Math.max(
+        1.0,
+        entry.multiplier - entry.cleanStreak * CLEAN_DECAY_PER_MESSAGE,
+      );
 
       clog(
         console.log,

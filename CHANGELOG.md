@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-17
+
+### Security
+
+- Update `discord.js` from 14.26.5 to 14.27.0, pulling in `undici` 6.27.0 (was 6.24.1) to fix 4 Dependabot advisories: GHSA-35p6-xmwp-9g52 (response queue poisoning), GHSA-vxpw-j846-p89q (WebSocket DoS), GHSA-p88m-4jfj-68fv (header injection), GHSA-g8m3-5g58-fq7m (cookie SameSite downgrade)
+
+### Changed
+
+- Code-style formatting applied to documentation and source files (Prettier)
+
+## [1.2.0] - 2026-07-17
+
+### Added
+
+- New `mention_guard` module: detects @everyone/@here/@role mentions from non-moderators with a dynamic escalating multiplier (3.0x–5.0x) that decays on clean messages
+- 15 unit tests for mentionGuard module (total test count: 125)
+- Japanese translation for Mention Guard section in README.ja.md
+
+### Changed
+
+- `/debug` command now requires Administrator permission (was unrestricted)
+- Standard profile expanded from 4 to 5 modules (`mention_guard`, weight: 10)
+- Pipeline extended: mention guard check runs after user_profile audit, before velocity check
+- `/config view` and `/debug` display effective pressure range for mention_guard
+- Documentation updated across README and DOCUMENTATION (EN and JA)
+
 ## [1.1.0] - 2026-07-15
 
 ### Added
@@ -67,6 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD pipeline with Docker image build and test step
 - Dependabot configuration for automated dependency updates
 
-[Unreleased]: https://github.com/anomalyco/exia/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/anomalyco/exia/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/anomalyco/exia/releases/tag/v1.2.1
+[1.2.0]: https://github.com/anomalyco/exia/releases/tag/v1.2.0
 [1.1.0]: https://github.com/anomalyco/exia/releases/tag/v1.1.0
 [1.0.0]: https://github.com/anomalyco/exia/releases/tag/v1.0.0
