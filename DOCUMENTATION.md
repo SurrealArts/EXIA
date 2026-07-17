@@ -27,6 +27,7 @@
    - 5.3 Honeypot Trap (`src/modules/honeypotTrap.js`)
    - 5.4 User Profile (`src/modules/userProfile.js`)
    - 5.5 Raid Protection (`src/modules/raidProtection.js`)
+   - 5.6 Mention Guard (`src/modules/mentionGuard.js`)
 6. [Commands](#6-commands)
    - 6.1 Configuration (`src/commands/configuration.js`)
    - 6.2 Appeals (`src/commands/appeals.js`)
@@ -82,6 +83,8 @@ EXIA/
 │   ├── modules/
 │   │   ├── honeypotTrap.js           # Fast-track ban on restricted channel messages
 │   │   ├── honeypotTrap.test.js      # Vitest suite for honeypot
+│   │   ├── mentionGuard.js           # @everyone/@here/@role detection + dynamic multiplier
+│   │   ├── mentionGuard.test.js      # Vitest suite for mention guard
 │   │   ├── raidProtection.js         # 3-stage raid escalation, permission backup/restore
 │   │   ├── raidProtection.test.js    # Vitest suite for raid protection
 │   │   ├── regexSandbox.js           # Worker-thread regex evaluation with timeout
@@ -219,7 +222,7 @@ Runs at every startup. Checks `PRAGMA table_info` for column existence before al
 
 `ensureStandardProfile(guildId)` — Creates a locked Standard profile for a guild if none exists:
 
-- **4 modules:** user_profile (15), velocity (10), honeypot (0, critical), regex (10)
+- **5 modules:** user_profile (15), velocity (10), honeypot (0, critical), regex (10), mention_guard (10)
 - **4 thresholds:** T1 warn 25p, T2 mute 50p, T3 kick 75p, T4 ban 100p
 - **1 regex rule:** Anti-invites — matches Discord invite URLs, weight 50
 - Profile is locked (`is_locked = 1`) — cannot be removed
@@ -348,21 +351,23 @@ messageCreate
 2. Honeypot check → fast-track if triggered
   ↓
 3. user_profile audit → multiplier calculation
+   ↓
+4. Mention guard check (unless fast-track) → @everyone/@here/@role detection, dynamic multiplier
+   ↓
+5. Velocity check (unless fast-track) → token consumption, multi-channel detection
+   ↓
+6. Regex evaluation (unless fast-track or sticker-only) → worker thread per rule
+   ↓
+7. Profile reason collection → appends to flagReasons
   ↓
-4. Velocity check (unless fast-track) → token consumption, multi-channel detection
+8. Sanction execution if any module triggered an action
   ↓
-5. Regex evaluation (unless fast-track or sticker-only) → worker thread per rule
-  ↓
-6. Profile reason collection → appends to flagReasons
-  ↓
-7. Sanction execution if any module triggered an action
-  ↓
-8. Telemetry enqueue for all flag reasons
+9. Telemetry enqueue for all flag reasons
 ```
 
 #### **1. Bootstrap**
 
-Queries `GuildConfiguration` by guild ID. If no row exists, calls `applyStandardProfile(guildId)` which writes the Standard profile to active tables. Then loads module weight map disabled modules filtered out).
+Queries `GuildConfiguration` by guild ID. If no row exists, calls `applyStandardProfile(guildId)` which writes the Standard profile to active tables. Then loads module weight map disabled modules filtered out.
 
 #### **2. Honeypot Check**
 
@@ -372,7 +377,16 @@ Calls `checkHoneypot(message, db)` (see §5.3). If triggered and not whitelisted
 
 Calls `auditProfile(message.member)` (see §5.4). If the user_profile module is enabled, the returned multiplier is applied to velocity and regex weights. If disabled, multiplier is 1.0.
 
-#### **4. Velocity Check**
+#### **4. Mention Guard Check**
+
+Calls `checkMentionGuard(message, lang)` (see §5.6). If the message contains @everyone, @here, or role mentions and the user lacks Manage Messages permission:
+
+- Weight = `module_weight × mention_multiplier` (mention_multiplier: 3.0x first offense, +1.0x per repeat, cap 5.0x)
+- `mention_multiplier` decays by `cleanStreak × 0.1` per clean message
+- Calls `applyPressure` with the effective weight
+- Profile multiplier does not compound with mention multiplier (independent axes)
+
+#### **5. Velocity Check**
 
 Calls `consumeToken(guildId, userId, channelId)` (see §5.1). If exceeded:
 
@@ -380,7 +394,7 @@ Calls `consumeToken(guildId, userId, channelId)` (see §5.1). If exceeded:
 - Token exhaustion: pressure = module weight (or 5 if no module)
 - Both cases: weight is multiplied by multiplier, then `applyPressure` is called
 
-#### **5. Regex Evaluation**
+#### **6. Regex Evaluation**
 
 Iterates all DB regex rules for the guild. For each rule, calls `evaluateRegex(pattern, content)` (see §5.2) via worker thread. On match:
 
@@ -388,11 +402,11 @@ Iterates all DB regex rules for the guild. For each rule, calls `evaluateRegex(p
 - Calls `applyPressure` with the weight
 - Breaks on first match
 
-#### **6. Profile Reasons**
+#### **7. Profile Reasons**
 
 All profile reasons (e.g., "account too young", "no avatar set") are appended to flagReasons.
 
-#### **7. Sanction Execution** (`executeSanction`)
+#### **8. Sanction Execution** (`executeSanction`)
 
 Called if `highestAction.action` is non-null:
 
@@ -461,6 +475,7 @@ The `/config view` embed:
 - Module fields: 3 columns per module (emoji+name, weight, critical)
   - `regex` shows weight as min~max range of rule weights
   - `user_profile` shows "Multiplier" as value and tier breakdown
+  - `mention_guard` shows effective pressure range (weight × 3.0~5.0) as weight
 - Thresholds table with tier, pressure, action, delete-seconds
 - Regex rules list (pattern truncated to 50 chars)
 - Pressure → Action Map showing each tier's range
@@ -500,7 +515,7 @@ The `refresh` handler defers reply (may take time), iterates `interaction.guild.
 Full system state embed:
 
 - Profile, raid stage, member count, queue length, uptime
-- Module table: name, weight/critical/enabled (regex shows weight range, user_profile shows tiers)
+- Module table: name, weight/critical/enabled (regex shows weight range, user_profile shows tiers, mention_guard shows effective pressure range)
 - Thresholds: tier → pressure/action/delete-seconds
 - Regex rules: identifier, weight, critical
 - Active pressure scores: user mentions, pressure, seconds since update
@@ -708,6 +723,51 @@ Increments spike count for a guild, creating a new state entry if none exists.
 
 ---
 
+### 5.6 Mention Guard (`src/modules/mentionGuard.js`)
+
+Detects @everyone, @here, and role mentions from non-moderator users. Exempts users with Manage Messages or Administrator permission.
+
+#### State
+
+```js
+// mentionState: Map<"guildId:userId", { multiplier: number, cleanStreak: number }>
+const mentionState = new Map();
+```
+
+#### `checkMentionGuard(message, lang)`
+
+1. **Permission check:** If user has `ManageMessages` or `Administrator` → exempt
+2. **Mention detection:** Checks `message.mentions.everyone`, `message.mentions.here`, `message.mentions.roles`
+3. **If triggered** (mention found + not exempt):
+   - First offense: sets `multiplier = 3.0`
+   - Repeat: `multiplier += 1.0` (cap 5.0)
+   - Returns `{ triggered: true, multiplier, reasons }`
+4. **If not triggered** but user has active state:
+   - Increments `cleanStreak`
+   - Decays `multiplier -= cleanStreak × 0.1` (clamped to ≥ 1.0)
+   - Removes entry when multiplier ≤ 1.0
+
+#### Multiplier Behavior
+
+| Offense                        | Multiplier | Effective pressure (weight 10) |
+| ------------------------------ | ---------- | ------------------------------ |
+| First mention                  | 3.0x       | 30p                            |
+| Second mention (no clean msgs) | 4.0x       | 40p                            |
+| Third+ mention (no clean msgs) | 5.0x (cap) | 50p                            |
+| After 3 clean messages         | ~2.4x      | 24p (below T1 — no action)     |
+
+The multiplier is **independent** of the user_profile multiplier — profile_mult does not compound with mention_mult.
+
+#### Constants
+
+| Constant                  | Value | Description                                   |
+| ------------------------- | ----- | --------------------------------------------- |
+| `MENTION_BASE_MULTIPLIER` | 3.0   | Starting multiplier on first mention          |
+| `MAX_MENTION_MULTIPLIER`  | 5.0   | Cap for repeat offenders                      |
+| `CLEAN_DECAY_PER_MESSAGE` | 0.1   | Base decay per clean message, scaled by streak|
+
+---
+
 ## 6. Commands
 
 ### 6.1 Configuration (`src/commands/configuration.js`)
@@ -733,7 +793,7 @@ Command structure:
 /config view
 ```
 
-Module choices: `user_profile`, `velocity`, `honeypot`, `regex`  
+Module choices: `user_profile`, `velocity`, `honeypot`, `regex`, `mention_guard`  
 Tier choices: 1 (warn), 2 (mute), 3 (kick), 4 (ban)
 
 ### 6.2 Appeals (`src/commands/appeals.js`)
@@ -779,7 +839,7 @@ Stage choices with descriptions:
 
 ### 6.5 Debug (`src/commands/debug.js`)
 
-Slash command builder: `/debug` (no permission restriction).
+Slash command builder: `/debug` (Administrator permission required).
 
 Returns a full system state embed showing modules, thresholds, regex rules, active pressure scores, raid state, telemetry queue length, uptime, and member count.
 
@@ -982,13 +1042,14 @@ pnpm test:watch    # Watch mode
 pnpm lint          # Prettier check + ESLint
 ```
 
-Current test suites (110 tests total):
+Current test suites (125 tests total):
 
 - `pressureEngine.test.js` — applyPressure, decay, mutex, fast-track, multi-guild isolation
 - `velocityBucket.test.js` — token consumption, refill, multi-channel detection, auto-removal
 - `regexSandbox.test.js` — pattern matching, empty content guard, timeout
 - `honeypotTrap.test.js` — channel detection, admin whitelist, no-config case
 - `userProfile.test.js` — multiplier tiers, reason generation
+- `mentionGuard.test.js` — @everyone/@here/@role trigger, exemption, escalation, decay, cap
 - `telemetryQueue.test.js` — enqueue, flush, chunking, field limits
 - `locale.test.js` — translation, fallback, interpolation, guild language resolution
 - `queryCache.test.js` — caching, eviction, invalidation

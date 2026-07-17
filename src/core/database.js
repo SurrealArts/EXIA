@@ -220,6 +220,7 @@ export function ensureStandardProfile(guildId) {
     { module_name: "velocity", weight: 10, is_critical: 0, is_enabled: 1 },
     { module_name: "honeypot", weight: 0, is_critical: 1, is_enabled: 1 },
     { module_name: "regex", weight: 10, is_critical: 0, is_enabled: 1 },
+    { module_name: "mention_guard", weight: 10, is_critical: 0, is_enabled: 1 },
   ];
 
   const thresholds = [
@@ -271,7 +272,7 @@ export function ensureStandardProfile(guildId) {
 
   clog(
     console.log,
-    `${LOG_TAG} Standard profile seeded for guild ${guildId} — 4 modules, 4 thresholds, 1 regex rule (Anti-invites)`,
+    `${LOG_TAG} Standard profile seeded for guild ${guildId} — 5 modules, 4 thresholds, 1 regex rule (Anti-invites)`,
   );
 }
 
@@ -297,9 +298,30 @@ export function applyStandardProfile(guildId) {
         is_critical: 0,
         is_enabled: 1,
       },
-      { module_name: "velocity", weight: 10, is_critical: 0, is_enabled: 1 },
-      { module_name: "honeypot", weight: 0, is_critical: 1, is_enabled: 1 },
-      { module_name: "regex", weight: 10, is_critical: 0, is_enabled: 1 },
+      {
+        module_name: "velocity",
+        weight: 10,
+        is_critical: 0,
+        is_enabled: 1
+      },
+      {
+        module_name: "honeypot",
+        weight: 0,
+        is_critical: 1,
+        is_enabled: 1,
+      },
+      {
+        module_name: "regex",
+        weight: 10,
+        is_critical: 0,
+        is_enabled: 1,
+      },
+      {
+        module_name: "mention_guard",
+        weight: 10,
+        is_critical: 0,
+        is_enabled: 1,
+      },
     ];
     for (const m of mods) {
       insMod.run(guildId, m.module_name, m.weight, m.is_critical, m.is_enabled);
@@ -356,7 +378,7 @@ export function applyStandardProfile(guildId) {
   ensureStandardProfile(guildId);
   clog(
     console.log,
-    `${LOG_TAG} Standard profile applied for guild ${guildId} — modules/thresholds/regex written to active tables`,
+    `${LOG_TAG} Standard profile applied for guild ${guildId} — 5 modules, 4 thresholds, 1 regex written to active tables`,
   );
 }
 

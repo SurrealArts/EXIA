@@ -489,7 +489,7 @@ async function handleConfigCommand(interaction, db) {
       .prepare("SELECT active_profile FROM GuildConfiguration WHERE guild_id = ?")
       .get(interaction.guildId);
 
-    const allModuleNames = ["user_profile", "velocity", "honeypot", "regex"];
+    const allModuleNames = ["user_profile", "velocity", "honeypot", "regex", "mention_guard"];
     const moduleMap = {};
     for (const m of modules) {
       moduleMap[m.module_name] = m;
@@ -552,6 +552,29 @@ async function handleConfigCommand(interaction, db) {
           {
             name: t(lang, "embed.config.modules.tiers"),
             value: t(lang, "embed.config.modules.tiers.value"),
+            inline: true,
+          },
+          {
+            name: t(lang, "embed.config.modules.criticalLabel"),
+            value: `\`${critLabel}\``,
+            inline: true,
+          },
+        ];
+      }
+
+      if (name === "mention_guard") {
+        const minPressure = m.weight * 3;
+        const maxPressure = m.weight * 5;
+        const weightDisplay = `${minPressure}~${maxPressure}`;
+        return [
+          {
+            name: `${statusEmoji} ${m.module_name}`,
+            value: "** **",
+            inline: true,
+          },
+          {
+            name: t(lang, "embed.config.modules.weightLabel"),
+            value: `\`${weightDisplay}\``,
             inline: true,
           },
           {
@@ -1184,7 +1207,7 @@ async function handleDebugCommand(interaction, db) {
     "",
   );
 
-  const allModuleNames = ["user_profile", "velocity", "honeypot", "regex"];
+  const allModuleNames = ["user_profile", "velocity", "honeypot", "regex", "mention_guard"];
   const moduleMap = {};
   for (const m of modules) {
     moduleMap[m.module_name] = m;
@@ -1212,6 +1235,18 @@ async function handleDebugCommand(interaction, db) {
       lines.push(
         t(lang, "embed.debug.moduleLine.profile", {
           name: m.module_name,
+          critical: m.is_critical,
+          enabled: m.is_enabled,
+        }),
+      );
+    } else if (name === "mention_guard") {
+      const minPressure = m.weight * 3;
+      const maxPressure = m.weight * 5;
+      const weightDisplay = `${minPressure}~${maxPressure}p`;
+      lines.push(
+        t(lang, "embed.debug.moduleLine.regex", {
+          name: m.module_name,
+          weightDisplay,
           critical: m.is_critical,
           enabled: m.is_enabled,
         }),

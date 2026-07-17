@@ -46,6 +46,10 @@ Designates a restricted channel; any non-admin who sends a message there trigger
 
 Audits a user's account age and avatar status. Produces a multiplier (1.0x - 2.0x) that amplifies pressure from other modules when the account is young, has no avatar, or both.
 
+### Mention Guard
+
+Detects @everyone, @here, and role mentions from non-moderator users. Applies a dynamic multiplier (3.0x - 5.0x) that escalates on repeat offenses and decays when the user sends clean messages. Exempts users with Manage Messages permission.
+
 ---
 
 ## Deployment

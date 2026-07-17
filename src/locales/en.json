@@ -7,6 +7,7 @@
   "command.config.modules.toggle.options.target_module.choices.velocity": "Velocity",
   "command.config.modules.toggle.options.target_module.choices.honeypot": "Honeypot Trap",
   "command.config.modules.toggle.options.target_module.choices.regex": "Regex",
+  "command.config.modules.toggle.options.target_module.choices.mention_guard": "Mention Guard",
   "command.config.modules.toggle.options.active_state.description": "Enable or disable",
   "command.config.modules.weight.description": "Set a module's pressure weight",
   "command.config.modules.weight.options.target_module.description": "Module to configure",
@@ -211,6 +212,9 @@
   "flag.reason.multiChannel": "sent messages in too many channels too quickly",
   "flag.reason.speed": "sent messages too quickly",
   "flag.reason.regex": "sent a message matching the \"{ruleIdentifier}\" pattern",
+  "flag.reason.mentionEveryone": "mentioned @everyone",
+  "flag.reason.mentionHere": "mentioned @here",
+  "flag.reason.mentionRole": "mentioned @{roleName}",
 
   "profile.reason.young": "account too young ({age} days < {minDays} days)",
   "profile.reason.noAvatar": "no avatar set",

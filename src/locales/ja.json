@@ -7,6 +7,7 @@
   "command.config.modules.toggle.options.target_module.choices.velocity": "ベロシティ",
   "command.config.modules.toggle.options.target_module.choices.honeypot": "ハニーポットトラップ",
   "command.config.modules.toggle.options.target_module.choices.regex": "正規表現",
+  "command.config.modules.toggle.options.target_module.choices.mention_guard": "メンションガード",
   "command.config.modules.toggle.options.active_state.description": "有効または無効",
   "command.config.modules.weight.description": "モジュールの圧力重みを設定",
   "command.config.modules.weight.options.target_module.description": "設定するモジュール",
@@ -211,6 +212,9 @@
   "flag.reason.multiChannel": "あまりにも多くのチャンネルに短時間でメッセージを送信しました",
   "flag.reason.speed": "メッセージを送信する速度が速すぎます",
   "flag.reason.regex": "\"{ruleIdentifier}\" パターンに一致するメッセージを送信しました",
+  "flag.reason.mentionEveryone": "@everyone にメンションしました",
+  "flag.reason.mentionHere": "@here にメンションしました",
+  "flag.reason.mentionRole": "@{roleName} にメンションしました",
 
   "profile.reason.young": "アカウントが若すぎます（{age}日 < {minDays}日）",
   "profile.reason.noAvatar": "アバターが設定されていません",

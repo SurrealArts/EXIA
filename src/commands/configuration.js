@@ -80,6 +80,19 @@ export const configCommand = new SlashCommandBuilder()
                     ),
                   },
                 },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.mention_guard",
+                  ),
+                  value: "mention_guard",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.mention_guard",
+                    ),
+                  },
+                },
               ),
           )
           .addBooleanOption((opt) =>
@@ -159,6 +172,19 @@ export const configCommand = new SlashCommandBuilder()
                     ja: t(
                       "ja",
                       "command.config.modules.toggle.options.target_module.choices.regex",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.mention_guard",
+                  ),
+                  value: "mention_guard",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.mention_guard",
                     ),
                   },
                 },
@@ -243,6 +269,19 @@ export const configCommand = new SlashCommandBuilder()
                     ja: t(
                       "ja",
                       "command.config.modules.toggle.options.target_module.choices.regex",
+                    ),
+                  },
+                },
+                {
+                  name: t(
+                    "en",
+                    "command.config.modules.toggle.options.target_module.choices.mention_guard",
+                  ),
+                  value: "mention_guard",
+                  name_localizations: {
+                    ja: t(
+                      "ja",
+                      "command.config.modules.toggle.options.target_module.choices.mention_guard",
                     ),
                   },
                 },

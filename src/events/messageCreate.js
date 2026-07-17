@@ -4,6 +4,7 @@ import { consumeToken } from "../modules/velocityBucket.js";
 import { checkHoneypot } from "../modules/honeypotTrap.js";
 import { evaluateRegex } from "../modules/regexSandbox.js";
 import { auditProfile } from "../modules/userProfile.js";
+import { checkMentionGuard } from "../modules/mentionGuard.js";
 import { recordSpike } from "../modules/raidProtection.js";
 import { enqueue } from "../utils/telemetryQueue.js";
 import { cachedGet, cachedAll } from "../utils/queryCache.js";
@@ -100,6 +101,36 @@ export default async function handleMessageCreate(message) {
     console.log,
     `${LOG_TAG} user_profile module enabled: ${profileEnabled} | multiplier: ${multiplier}x | profile reasons: [${profile.reasons.join(", ")}]`,
   );
+
+  if (!isFastTrack) {
+    const mentionCheck = checkMentionGuard(message, lang);
+    clog(
+      console.log,
+      `${LOG_TAG} MentionGuard — triggered: ${mentionCheck.triggered}, multiplier: ${mentionCheck.multiplier}x, reasons: [${mentionCheck.reasons.join(", ")}]`,
+    );
+    if (mentionCheck.triggered) {
+      const mod = weightMap.get("mention_guard");
+      if (mod) {
+        const rawWeight = mod.weight;
+        const weight = Math.round(rawWeight * mentionCheck.multiplier);
+        const critical = mod?.is_critical ?? false;
+        clog(
+          console.log,
+          `${LOG_TAG} MentionGuard triggered — rawWeight: ${rawWeight}, mentionMult: ${mentionCheck.multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
+        );
+
+        const mentionResult = applyPressure(guildId, userId, weight, critical, thresholds);
+        clog(
+          console.log,
+          `${LOG_TAG} MentionGuard pressure result — action: ${mentionResult.action || "none"}, tier: ${mentionResult.tier || "N/A"}`,
+        );
+        if (mentionResult.action) {
+          highestAction = mentionResult;
+        }
+        flagReasons.push(...mentionCheck.reasons);
+      }
+    }
+  }
 
   if (!isFastTrack) {
     const velResult = consumeToken(guildId, userId, message.channelId);
