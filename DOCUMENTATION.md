@@ -1,6 +1,6 @@
 # EXIA — Full Project Documentation
 
-**Version:** 1.2.1  
+**Version:** 1.3.0  
 **Stack:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL mode)  
 **Package Manager:** pnpm 11.12 (ESM-only)  
 **Entry Point:** `src/index.js`
@@ -34,7 +34,8 @@
    - 6.3 Profiles (`src/commands/profiles.js`)
    - 6.4 Raid (`src/commands/raid.js`)
    - 6.5 Debug (`src/commands/debug.js`)
-   - 6.6 Language (`src/commands/language.js`)
+   - 6.6 Help (`src/commands/help.js`)
+   - 6.7 Language (`src/commands/language.js`)
 7. [Utilities](#7-utilities)
    - 7.1 CLOG (`src/utils/clog.js`)
    - 7.2 Telemetry Queue (`src/utils/telemetryQueue.js`)
@@ -139,7 +140,6 @@ EXIA/
 | `discord.js`     | ^14.26.5 | Discord API client + interaction framework                |
 | `better-sqlite3` | ^12.11.1 | Synchronous SQLite3 binding (WAL mode)                    |
 | `dotenv-flow`    | ^4.1.0   | `.env` loading with environment-specific override support |
-| `pino`           | ^10.3.1  | Structured JSON logger (removed in v1.2.1)                |
 
 ### Dev Dependencies
 
@@ -843,7 +843,17 @@ Slash command builder: `/debug` (Administrator permission required).
 
 Returns a full system state embed showing modules, thresholds, regex rules, active pressure scores, raid state, telemetry queue length, uptime, and member count.
 
-### 6.6 Language (`src/commands/language.js`)
+### 6.6 Help (`src/commands/help.js`)
+
+Slash command builder: `/help` (no permission restriction).
+
+Displays an embed with:
+
+- Bot version (`EXIA v{version}`, discord.js v{djsVersion})
+- Summary of all 7 slash commands with brief descriptions
+- Links to English and Japanese documentation
+
+### 6.7 Language (`src/commands/language.js`)
 
 Slash command builder: `/language` (Administrator permission required).
 

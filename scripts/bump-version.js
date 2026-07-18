@@ -18,14 +18,7 @@ packageJson.version = newVersion;
 writeFileSync("package.json", JSON.stringify(packageJson, null, 2) + "\n", "utf-8");
 console.log("Updated package.json");
 
-const files = [
-  ".env",
-  ".env.example",
-  "README.md",
-  "README.ja.md",
-  "DOCUMENTATION.md",
-  "DOCUMENTATION.ja.md",
-];
+const files = ["README.md", "README.ja.md", "DOCUMENTATION.md", "DOCUMENTATION.ja.md"];
 
 const escaped = oldVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const re = new RegExp(`(?<=^|[^\\d])${escaped}(?=[^\\d]|$)`, "gm");

@@ -51,6 +51,9 @@ export default async function handleInteractionCreate(interaction) {
     case "debug":
       await handleDebugCommand(interaction, db);
       break;
+    case "help":
+      await handleHelpCommand(interaction, db);
+      break;
     case "language":
       await handleLanguageCommand(interaction, db);
       break;
@@ -1140,6 +1143,39 @@ async function handleRaidCommand(interaction, db) {
   });
 }
 
+// ─── /help handler ─────────────────────────────────────────────────────────
+
+/**
+ * @param {import('discord.js').CommandInteraction} interaction
+ * @param {import('better-sqlite3').Database} db
+ */
+async function handleHelpCommand(interaction, db) {
+  const lang = resolveInteractionLang(interaction, db, interaction.guildId);
+  const { EmbedBuilder, version: djsVersion } = await import("discord.js");
+  const { version } = await import("../config/config.js");
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(t(lang, "embed.help.title"))
+    .setDescription(t(lang, "embed.help.description"))
+    .addFields(
+      {
+        name: t(lang, "embed.help.version"),
+        value: `**EXIA v${version}** (discord.js v${djsVersion})`,
+        inline: false,
+      },
+      {
+        name: t(lang, "embed.help.commands"),
+        value: t(lang, "embed.help.commandsValue"),
+        inline: false,
+      },
+      { name: t(lang, "embed.help.docs"), value: t(lang, "embed.help.docsValue"), inline: false },
+    )
+    .setFooter({ text: t(lang, "embed.help.footer", { version }) });
+
+  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
+
 // ─── /debug handler ────────────────────────────────────────────────────────
 
 /**
@@ -1148,7 +1184,8 @@ async function handleRaidCommand(interaction, db) {
  */
 async function handleDebugCommand(interaction, db) {
   const lang = resolveInteractionLang(interaction, db, interaction.guildId);
-  const { EmbedBuilder } = await import("discord.js");
+  const { EmbedBuilder, version: djsVersion } = await import("discord.js");
+  const { version } = await import("../config/config.js");
   const { getAllPressureScores } = await import("../core/pressureEngine.js");
   const { getRaidStage } = await import("../modules/raidProtection.js");
   const { getQueueLength } = await import("../utils/telemetryQueue.js");
@@ -1183,6 +1220,7 @@ async function handleDebugCommand(interaction, db) {
   lines.push(
     t(lang, "embed.debug.title"),
     t(lang, "embed.debug.profile", { profileName: activeProfile?.active_profile || "Standard" }),
+    t(lang, "embed.debug.version", { version, djsVersion }),
     t(lang, "embed.debug.raid", {
       stage: raidStage,
       active:

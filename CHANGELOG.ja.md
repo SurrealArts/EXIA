@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-17
+
+### 追加
+
+- 新しい `/help` コマンド: ボットバージョン（EXIA + discord.js）、全7つのスラッシュコマンドの概要、ドキュメントへのリンクを表示
+- `/debug` 埋め込みにバージョン行を追加: EXIA バージョンと discord.js バージョンを表示
+
+### 変更
+
+- README と DOCUMENTATION のコマンド数を6から7に更新
+
 ## [1.2.1] - 2026-07-17
 
 ### セキュリティ
@@ -93,7 +104,8 @@
 - Docker イメージビルドとテストステップを含む CI/CD パイプライン
 - 自動依存関係更新のための Dependabot 設定
 
-[Unreleased]: https://github.com/anomalyco/exia/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/anomalyco/exia/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/anomalyco/exia/releases/tag/v1.3.0
 [1.2.1]: https://github.com/anomalyco/exia/releases/tag/v1.2.1
 [1.2.0]: https://github.com/anomalyco/exia/releases/tag/v1.2.0
 [1.1.0]: https://github.com/anomalyco/exia/releases/tag/v1.1.0

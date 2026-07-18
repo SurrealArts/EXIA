@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-17
+
+### Added
+
+- New `/help` command: shows bot version (EXIA + discord.js), summary of all 7 slash commands, and links to documentation
+- Version line in `/debug` embed: displays EXIA version and discord.js version
+
+### Changed
+
+- Command count updated from 6 to 7 in README and DOCUMENTATION
+
 ## [1.2.1] - 2026-07-17
 
 ### Security
@@ -93,7 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD pipeline with Docker image build and test step
 - Dependabot configuration for automated dependency updates
 
-[Unreleased]: https://github.com/anomalyco/exia/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/anomalyco/exia/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/anomalyco/exia/releases/tag/v1.3.0
 [1.2.1]: https://github.com/anomalyco/exia/releases/tag/v1.2.1
 [1.2.0]: https://github.com/anomalyco/exia/releases/tag/v1.2.0
 [1.1.0]: https://github.com/anomalyco/exia/releases/tag/v1.1.0

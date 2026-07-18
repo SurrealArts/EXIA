@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.2.1-blue)
+![version](https://img.shields.io/badge/version-1.3.0-blue)
 
 > **🌐 Language:** [English](README.md) · [日本語](README.ja.md)  
 > **📄 Documentation:** [English](DOCUMENTATION.md) · [日本語](DOCUMENTATION.ja.md)  
@@ -70,7 +70,6 @@ Create a `.env` file from `.env.example`:
 ```env
 CLIENT_ID=your_client_id
 TOKEN=your_bot_token
-VERSION=1.2.1
 
 LOG_WITH_TIME=true
 LOG_TIMEZONE=UTC
@@ -82,7 +81,7 @@ LOG_TIMEZONE=UTC
 docker compose up -d --build
 ```
 
-The bot registers 6 slash commands globally on startup:
+The bot registers 7 slash commands globally on startup:
 
 - `/config` — Manage modules, thresholds, regex rules, honeypot, log channel, and view config
 - `/actions` — Appeal/rejoin links, manual ban, refresh member scan
@@ -90,6 +89,7 @@ The bot registers 6 slash commands globally on startup:
 - `/profiles` — Create, list, apply, export, import, and remove config profiles (Standard locked)
 - `/raid` — Set raid stage (0–3), check current status
 - `/debug` — Full system state: modules, thresholds, active pressure scores, telemetry queue
+- `/help` — Show bot version, available commands, and links to documentation
 
 SQLite data persists in a named Docker volume (`exia_data`).
 

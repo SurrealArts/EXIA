@@ -71,6 +71,8 @@
   "command.raid.stage.options.stage.choices.stage3": "ステージ3 — ロックダウン",
   "command.raid.status.description": "現在のレイドステージを確認",
 
+  "command.help.description": "ヘルプとボットのバージョン情報を表示",
+
   "command.debug.description": "デバッグ用の完全なシステム状態を表示",
 
   "command.language.description": "このサーバーのボット言語を設定",
@@ -174,6 +176,7 @@
 
   "embed.debug.title": "𝖤𝖷𝖨𝖠 デバッグ",
   "embed.debug.profile": "プロファイル: **{profileName}**",
+  "embed.debug.version": "バージョン: **EXIA v{version}** (discord.js v{djsVersion})",
   "embed.debug.raid": "レイド: **ステージ{stage}**{active}",
   "embed.debug.raid.active": " ⚠️ アクティブ",
   "embed.debug.raid.inactive": "（非アクティブ）",
@@ -196,6 +199,15 @@
   "embed.debug.pressureLine": "  <@{userId}> → {pressure}p（最終: {seconds}秒前）",
   "embed.debug.pressureNone": "**アクティブな圧力スコア**\n  （なし）",
   "embed.debug.footer": "/config view で人間が読める表示",
+
+  "embed.help.title": "𝖤𝖷𝖨𝖠 ヘルプ",
+  "embed.help.description": "EXIA は Discord 用のモジュール式自動モデレーションボットです。\n以下のコマンドを使用してサーバーを設定・監視できます。",
+  "embed.help.version": "バージョン",
+  "embed.help.commands": "コマンド",
+  "embed.help.commandsValue": "**/config** — モジュール、しきい値、正規表現ルール、ハニーポット、ログチャンネルを管理\n**/actions** — 異議申し立て/再参加リンク、手動BAN、メンバースキャンの更新\n**/profiles** — 構成プロファイルの作成、表示、適用、エクスポート、インポート\n**/raid** — レイドステージ（0–3）の設定、現在の状態を確認\n**/debug** — 完全なシステム状態を表示\n**/help** — このメッセージを表示\n**/language** — サーバーの言語を設定",
+  "embed.help.docs": "ドキュメント",
+  "embed.help.docsValue": "[English](https://github.com/SurrealArts/EXIA/blob/master/DOCUMENTATION.md)\n[日本語](https://github.com/SurrealArts/EXIA/blob/master/DOCUMENTATION.ja.md)",
+  "embed.help.footer": "EXIA v{version} — GitHubでオープンソース",
 
   "sanction.warn.dm": "⚠️ **警告** in **{guildName}**\n理由: {reason}",
   "sanction.mute.dm": "🔇 **ミュート** in **{guildName}**\n理由: {reason}\n期間: 今から10分間",

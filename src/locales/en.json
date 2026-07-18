@@ -71,6 +71,8 @@
   "command.raid.stage.options.stage.choices.stage3": "Stage 3 — Lockdown",
   "command.raid.status.description": "Check current raid stage",
 
+  "command.help.description": "Show help and bot version information",
+
   "command.debug.description": "Show full system state for debugging",
 
   "command.language.description": "Set the bot language for this server",
@@ -174,6 +176,7 @@
 
   "embed.debug.title": "𝖤𝖷𝖨𝖠 Debug",
   "embed.debug.profile": "Profile: **{profileName}**",
+  "embed.debug.version": "Version: **EXIA v{version}** (discord.js v{djsVersion})",
   "embed.debug.raid": "Raid: **Stage {stage}**{active}",
   "embed.debug.raid.active": " ⚠️ ACTIVE",
   "embed.debug.raid.inactive": " (inactive)",
@@ -196,6 +199,15 @@
   "embed.debug.pressureLine": "  <@{userId}> → {pressure}p (last: {seconds}s ago)",
   "embed.debug.pressureNone": "**Active Pressure Scores**\n  (none)",
   "embed.debug.footer": "/config view for human-readable display",
+
+  "embed.help.title": "𝖤𝖷𝖨𝖠 Help",
+  "embed.help.description": "EXIA is a modular auto-moderation bot for Discord.\nUse the commands below to configure and monitor your server.",
+  "embed.help.version": "Version",
+  "embed.help.commands": "Commands",
+  "embed.help.commandsValue": "**/config** — Manage modules, thresholds, regex rules, honeypot, log channel\n**/actions** — Appeal/rejoin links, manual ban, refresh member scan\n**/profiles** — Create, list, apply, export, import config profiles\n**/raid** — Set raid stage (0–3), check current status\n**/debug** — Full system state\n**/help** — Show this message\n**/language** — Set guild language",
+  "embed.help.docs": "Documentation",
+  "embed.help.docsValue": "[English](https://github.com/SurrealArts/EXIA/blob/master/DOCUMENTATION.md)\n[日本語](https://github.com/SurrealArts/EXIA/blob/master/DOCUMENTATION.ja.md)",
+  "embed.help.footer": "EXIA v{version} — Open source on GitHub",
 
   "sanction.warn.dm": "⚠️ **Warning** in **{guildName}**\nReason: {reason}",
   "sanction.mute.dm": "🔇 **Muted** in **{guildName}**\nReason: {reason}\nDuration: 10 minutes from now",

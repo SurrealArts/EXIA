@@ -1,6 +1,6 @@
 # EXIA — プロジェクト完全ドキュメント
 
-**バージョン:** 1.2.1  
+**バージョン:** 1.3.0  
 **スタック:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL モード)  
 **パッケージマネージャー:** pnpm 11.12 (ESM のみ)  
 **エントリーポイント:** `src/index.js`
@@ -34,7 +34,8 @@
    - 6.3 プロフィール (`src/commands/profiles.js`)
    - 6.4 レイド (`src/commands/raid.js`)
    - 6.5 デバッグ (`src/commands/debug.js`)
-   - 6.6 言語 (`src/commands/language.js`)
+   - 6.6 ヘルプ (`src/commands/help.js`)
+   - 6.7 言語 (`src/commands/language.js`)
 7. [ユーティリティ](#7-ユーティリティ)
    - 7.1 CLOG (`src/utils/clog.js`)
    - 7.2 テレメトリキュー (`src/utils/telemetryQueue.js`)
@@ -139,7 +140,6 @@ EXIA/
 | `discord.js`     | ^14.26.5   | Discord API クライアント + インタラクションフレームワーク |
 | `better-sqlite3` | ^12.11.1   | 同期型 SQLite3 バインディング (WAL モード)                |
 | `dotenv-flow`    | ^4.1.0     | 環境固有のオーバーライド対応 `.env` 読み込み              |
-| `pino`           | ^10.3.1    | 構造化 JSON ロガー (v1.2.1 で削除)                        |
 
 ### 開発依存関係
 
@@ -843,7 +843,17 @@ const mentionState = new Map();
 
 モジュール、しきい値、正規表現ルール、アクティブなプレッシャースコア、レイド状態、テレメトリキュー長、稼働時間、メンバー数を示す完全なシステム状態埋め込みを返す。
 
-### 6.6 言語 (`src/commands/language.js`)
+### 6.6 ヘルプ (`src/commands/help.js`)
+
+スラッシュコマンドビルダー: `/help` (権限制限なし)。
+
+次の内容を含む埋め込みを表示:
+
+- ボットバージョン (`EXIA v{version}`、discord.js v{djsVersion})
+- 全7つのスラッシュコマンドの概要と簡単な説明
+- 英語および日本語のドキュメントへのリンク
+
+### 6.7 言語 (`src/commands/language.js`)
 
 スラッシュコマンドビルダー: `/language` (Administrator 権限が必要)。
 

@@ -1,5 +1,5 @@
-import { Client, GatewayIntentBits, Events } from "discord.js";
-import { token } from "./config/config.js";
+import { Client, GatewayIntentBits, Events, ActivityType } from "discord.js";
+import { token, version } from "./config/config.js";
 import { initDatabase } from "./core/database.js";
 import { startDecayTimer } from "./core/pressureEngine.js";
 import { startRefillTimer } from "./modules/velocityBucket.js";
@@ -10,6 +10,7 @@ import { actionsCommand } from "./commands/appeals.js";
 import { profilesCommand } from "./commands/profiles.js";
 import { raidCommand } from "./commands/raid.js";
 import { debugCommand } from "./commands/debug.js";
+import { helpCommand } from "./commands/help.js";
 import { languageCommand } from "./commands/language.js";
 import handleMessageCreate from "./events/messageCreate.js";
 import handleInteractionCreate from "./events/interactionCreate.js";
@@ -54,6 +55,7 @@ client.once(Events.ClientReady, async (readyClient) => {
       profilesCommand,
       raidCommand,
       debugCommand,
+      helpCommand,
       languageCommand,
     ];
     await readyClient.application.commands.set(commandsArray);
@@ -61,6 +63,11 @@ client.once(Events.ClientReady, async (readyClient) => {
   } catch (err) {
     clog(console.error, `${LOG_TAG} Failed to register commands: ${err?.message || err}`);
   }
+
+  readyClient.user.setPresence({
+    activities: [{ name: `Running Ver${version || "?"}`, type: ActivityType.Playing }],
+    status: "online",
+  });
 
   startDecayTimer();
   clog(console.log, `${LOG_TAG} Pressure decay timer started (60s interval, -5p/cycle)`);
