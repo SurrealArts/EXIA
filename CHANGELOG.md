@@ -104,9 +104,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD pipeline with Docker image build and test step
 - Dependabot configuration for automated dependency updates
 
-[Unreleased]: https://github.com/anomalyco/exia/compare/v1.3.0...HEAD
-[1.3.0]: https://github.com/anomalyco/exia/releases/tag/v1.3.0
-[1.2.1]: https://github.com/anomalyco/exia/releases/tag/v1.2.1
-[1.2.0]: https://github.com/anomalyco/exia/releases/tag/v1.2.0
-[1.1.0]: https://github.com/anomalyco/exia/releases/tag/v1.1.0
-[1.0.0]: https://github.com/anomalyco/exia/releases/tag/v1.0.0
+[Unreleased]: https://github.com/SurrealArts/EXIA/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.0
+[1.2.1]: https://github.com/SurrealArts/EXIA/releases/tag/v1.2.1
+[1.2.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.2.0
+[1.1.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.1.0
+[1.0.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.0.0

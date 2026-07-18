@@ -104,9 +104,9 @@
 - Docker イメージビルドとテストステップを含む CI/CD パイプライン
 - 自動依存関係更新のための Dependabot 設定
 
-[Unreleased]: https://github.com/anomalyco/exia/compare/v1.3.0...HEAD
-[1.3.0]: https://github.com/anomalyco/exia/releases/tag/v1.3.0
-[1.2.1]: https://github.com/anomalyco/exia/releases/tag/v1.2.1
-[1.2.0]: https://github.com/anomalyco/exia/releases/tag/v1.2.0
-[1.1.0]: https://github.com/anomalyco/exia/releases/tag/v1.1.0
-[1.0.0]: https://github.com/anomalyco/exia/releases/tag/v1.0.0
+[Unreleased]: https://github.com/SurrealArts/EXIA/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.0
+[1.2.1]: https://github.com/SurrealArts/EXIA/releases/tag/v1.2.1
+[1.2.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.2.0
+[1.1.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.1.0
+[1.0.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.0.0
