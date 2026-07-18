@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-07-17
+## [1.3.0] - 2026-07-18
 
 ### Added
 
@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- New `mention_guard` module: detects @everyone/@here/@role mentions from non-moderators with a dynamic escalating multiplier (3.0x–5.0x) that decays on clean messages
+- New `mention_guard` module: detects `@everyone`/`@here`/`@role` mentions from non-moderators with a dynamic escalating multiplier (3.0x–5.0x) that decays on clean messages
 - 15 unit tests for mentionGuard module (total test count: 125)
 - Japanese translation for Mention Guard section in README.ja.md
 
