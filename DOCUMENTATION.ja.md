@@ -1,6 +1,6 @@
 # EXIA — プロジェクト完全ドキュメント
 
-**バージョン:** 1.3.0  
+**バージョン:** 1.3.1  
 **スタック:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL モード)  
 **パッケージマネージャー:** pnpm 11.12 (ESM のみ)  
 **エントリーポイント:** `src/index.js`

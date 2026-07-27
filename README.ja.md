@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.3.0-blue)
+![version](https://img.shields.io/badge/version-1.3.1-blue)
 
 > **🌐 言語:** [English](README.md) · [日本語](README.ja.md)  
 > **📄 ドキュメント:** [English](DOCUMENTATION.md) · [日本語](DOCUMENTATION.ja.md)  

@@ -1,6 +1,6 @@
 # EXIA — Full Project Documentation
 
-**Version:** 1.3.0  
+**Version:** 1.3.1  
 **Stack:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL mode)  
 **Package Manager:** pnpm 11.12 (ESM-only)  
 **Entry Point:** `src/index.js`
