@@ -152,17 +152,24 @@ export default async function handleMessageCreate(message) {
         `${LOG_TAG} Velocity exceeded — rawWeight: ${rawWeight}, multiplier: ${multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
       );
 
-      const velocityResult = applyPressure(guildId, userId, weight, critical, thresholds);
-      clog(
-        console.log,
-        `${LOG_TAG} Velocity pressure result — action: ${velocityResult.action || "none"}, tier: ${velocityResult.tier || "N/A"}`,
-      );
-      if (velocityResult.action) {
-        highestAction = velocityResult;
+      if (message.member?.moderatable !== false) {
+        const velocityResult = applyPressure(guildId, userId, weight, critical, thresholds);
+        clog(
+          console.log,
+          `${LOG_TAG} Velocity pressure result — action: ${velocityResult.action || "none"}, tier: ${velocityResult.tier || "N/A"}`,
+        );
+        if (velocityResult.action) {
+          highestAction = velocityResult;
+        }
+        flagReasons.push(
+          velResult.multiChannel ? t(lang, "flag.reason.multiChannel") : t(lang, "flag.reason.speed"),
+        );
+      } else {
+        clog(
+          console.log,
+          `${LOG_TAG} Skipping velocity pressure for ${userId}: not moderatable`,
+        );
       }
-      flagReasons.push(
-        velResult.multiChannel ? t(lang, "flag.reason.multiChannel") : t(lang, "flag.reason.speed"),
-      );
     }
   }
 
@@ -185,15 +192,22 @@ export default async function handleMessageCreate(message) {
           `${LOG_TAG} RULE MATCHED — threat_weight: ${rule.threat_weight}, multiplier: ${multiplier}x, finalWeight: ${weight}, critical: ${critical}`,
         );
 
-        const regexResult = applyPressure(guildId, userId, weight, critical, thresholds);
-        clog(
-          console.log,
-          `${LOG_TAG} Regex pressure result — action: ${regexResult.action || "none"}, tier: ${regexResult.tier || "N/A"}`,
-        );
-        if (regexResult.action) {
-          highestAction = regexResult;
+        if (message.member?.moderatable !== false) {
+          const regexResult = applyPressure(guildId, userId, weight, critical, thresholds);
+          clog(
+            console.log,
+            `${LOG_TAG} Regex pressure result — action: ${regexResult.action || "none"}, tier: ${regexResult.tier || "N/A"}`,
+          );
+          if (regexResult.action) {
+            highestAction = regexResult;
+          }
+          flagReasons.push(t(lang, "flag.reason.regex", { ruleIdentifier: rule.rule_identifier }));
+        } else {
+          clog(
+            console.log,
+            `${LOG_TAG} Skipping regex pressure for ${userId}: not moderatable`,
+          );
         }
-        flagReasons.push(t(lang, "flag.reason.regex", { ruleIdentifier: rule.rule_identifier }));
         break;
       }
     }

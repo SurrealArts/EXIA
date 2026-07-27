@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-27
+
+### Fixed
+
+- Skip pressure application for unmoderatable users (mods/admins) in regex and velocity modules — prevents persistent pressure buildup when the bot cannot timeout the target due to role hierarchy
+
 ## [1.3.0] - 2026-07-18
 
 ### Added
