@@ -20,6 +20,8 @@ FROM node:26-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
+RUN npm install -g pnpm@11.12.0
+
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/package.json ./
