@@ -52,6 +52,36 @@ describe("consumeToken", () => {
     expect(result.multiChannel).toBe(true);
   });
 
+  it("consumes a token on multi-channel triggers", () => {
+    consumeToken("guild1", "user1", "channelA");
+    consumeToken("guild1", "user1", "channelB");
+    const result = consumeToken("guild1", "user1", "channelC");
+    expect(result.exceeded).toBe(true);
+    expect(result.multiChannel).toBe(true);
+    expect(result.remaining).toBe(17);
+  });
+
+  it("catches paced multi-channel spam across the window", () => {
+    vi.useFakeTimers({
+      toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+    });
+    try {
+      const guildId = "guild1";
+      const userId = "user1";
+      const channels = ["channelA", "channelB", "channelC", "channelD"];
+      let result;
+      for (let i = 0; i < 8; i++) {
+        vi.advanceTimersByTime(6_000);
+        result = consumeToken(guildId, userId, channels[i % channels.length]);
+      }
+      expect(result.exceeded).toBe(true);
+      expect(result.multiChannel).toBe(true);
+      expect(result.pressure).toBe(30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("isolates buckets per user", () => {
     for (let i = 0; i < 20; i++) {
       consumeToken("guild1", "user1");

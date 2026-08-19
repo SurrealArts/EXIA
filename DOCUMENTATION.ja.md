@@ -1,8 +1,8 @@
 # EXIA — プロジェクト完全ドキュメント
 
-**バージョン:** 1.3.1  
+**バージョン:** 1.3.2  
 **スタック:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL モード)  
-**パッケージマネージャー:** pnpm 11.12 (ESM のみ)  
+**パッケージマネージャー:** pnpm 11.22 (ESM のみ)  
 **エントリーポイント:** `src/index.js`
 
 ---
@@ -68,7 +68,7 @@ EXIA/
 │   ├── config/
 │   │   └── config.js                 # dotenv-flow ローダー、環境変数バリデーション、エクスポート
 │   ├── core/
-│   │   ├── database.js               # SQLite 初期化、7 テーブル、マイグレーション、Standard プロフィール
+│   │   ├── database.js               # SQLite 初期化、9 テーブル、マイグレーション、Standard プロフィール
 │   │   ├── locale.js                 # i18n: t()、getGuildLanguage()、resolveInteractionLang()
 │   │   ├── locale.test.js            # ロケールの Vitest スイート
 │   │   ├── pressureEngine.js         # インメモリプレッシャースコア、減衰、mutex、fast-track
@@ -118,7 +118,7 @@ EXIA/
 ├── LICENSE                           # MIT ライセンス
 ├── package.json                      # プロジェクトマニフェスト、スクリプト、依存関係
 ├── pnpm-lock.yaml                    # ロックファイル
-├── pnpm-workspace.yaml               # Pnpm ワークスペース設定 (単一プロジェクト)
+├── pnpm-workspace.yaml               # Pnpm 設定: オーバーライド、許可されたビルドスクリプト
 ├── README.ja.md                      # 日本語ユーザーガイド
 └── README.md                         # ユーザー向け導入およびデプロイガイド
 ```
@@ -130,14 +130,14 @@ EXIA/
 ### ランタイム
 
 - **Node.js:** 26 (LTS)
-- **パッケージマネージャー:** pnpm 11.12 (`corepack` 経由)
+- **パッケージマネージャー:** pnpm 11.22 (`corepack` 経由)
 - **モジュールシステム:** ESM (`package.json` の `"type": "module"`)
 
 ### 依存関係
 
 | パッケージ       | バージョン | 目的                                                      |
 | ---------------- | ---------- | --------------------------------------------------------- |
-| `discord.js`     | ^14.26.5   | Discord API クライアント + インタラクションフレームワーク |
+| `discord.js`     | ^14.27.0   | Discord API クライアント + インタラクションフレームワーク |
 | `better-sqlite3` | ^12.11.1   | 同期型 SQLite3 バインディング (WAL モード)                |
 | `dotenv-flow`    | ^4.1.0     | 環境固有のオーバーライド対応 `.env` 読み込み              |
 
@@ -147,7 +147,7 @@ EXIA/
 | ----------------- | --------------------------- |
 | `eslint` ^10.7.0  | リンティング (フラット設定) |
 | `prettier` ^3.9.5 | コードフォーマット          |
-| `vitest` ^4.1.10  | テストランナー              |
+| `vitest` ^4.1.11  | テストランナー              |
 | `globals` ^17.7.0 | ESLint グローバル変数       |
 
 ### スクリプト
@@ -177,6 +177,15 @@ EXIA/
 - **npm** エコシステム (ルートディレクトリ) — 本番依存関係と開発依存関係をグループ化、マイナー/パッチのみ
 - **docker** エコシステム (ルートディレクトリ)
 
+### 依存関係オーバーライド (`pnpm-workspace.yaml`)
+
+pnpm 11 は設定を `pnpm-workspace.yaml` から読み取ります (package.json の `pnpm` フィールドは読み取られなくなりました):
+
+- `overrides.undici: ^6.28.0` — `@discordjs/rest` に修正済みの undici バージョンを強制 (Dependabot 勧告)
+- `overrides.vite: ^8.2.1` — `postcss >= 8.5.23` を引き込む vite バージョンを強制 (Dependabot 勧告)
+- `allowBuilds.better-sqlite3: true` — better-sqlite3 のネイティブビルドスクリプトを許可 (必須。ない場合 `pnpm run` は `ERR_PNPM_IGNORED_BUILDS` で終了)
+- `minimumReleaseAgeExclude` (`vitest`、`@vitest/*`) — pnpm 11.22 の組み込み 24 時間 `minimumReleaseAge` サプライチェーンゲートから開発用テストツールチェーンを除外 (除外しない場合、vitest リリース直後にロックファイル検証が失敗)
+
 ---
 
 ## 3. コアエンジン
@@ -191,20 +200,24 @@ EXIA/
 2. `data/` ディレクトリの存在を確認 (再帰的 `mkdirSync`)
 3. `data/exia.db` でデータベースを開く
 4. `PRAGMA journal_mode = WAL` と `PRAGMA foreign_keys = ON` を設定
-5. `createTables()` を呼び出す — 存在しない場合は 7 テーブルを作成
+5. `createTables()` を呼び出す — 存在しない場合は 9 テーブルを作成
 6. `runMigrations()` を呼び出す — 増分スキーママイグレーションを適用
 
 #### テーブル
 
-| テーブル               | 主キー                                                                    | 説明                                                                                                            |
-| ---------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **GuildConfiguration** | `guild_id TEXT`                                                           | ギルドごとの設定: log_channel_id、appeal_link、rejoin_link、honeypot_channel_id、active_profile、タイムスタンプ |
-| **ModuleWeights**      | `(guild_id, module_name)`                                                 | モジュールのトグル: weight (INT)、is_critical (BOOL)、is_enabled (BOOL)                                         |
-| **ThresholdActions**   | `(guild_id, pressure_tier)`                                               | プレッシャー → アクションのマッピング: action (TEXT)、message_delete_seconds (INT)、pressure (INT)              |
-| **RegexRules**         | `(guild_id, rule_identifier)`                                             | カスタム正規表現パターン: pattern (TEXT)、threat_weight (INT)、is_critical (BOOL)                               |
-| **ConfigProfiles**     | `(guild_id, profile_name)`                                                | 名前付き設定スナップショット: profile_data (JSON TEXT)、is_locked (BOOL)                                        |
-| **RaidState**          | `guild_id TEXT`                                                           | アクティブなレイドステージ、権限バックアップ JSON ブロブ、started_at                                            |
-| **Indexes**            | `idx_module_weights_guild`、`idx_threshold_tier`、`idx_regex_rules_guild` | パフォーマンスインデックス                                                                                      |
+| テーブル                 | 主キー                                                                                                                                            | 説明                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **GuildConfiguration**   | `guild_id TEXT`                                                                                                                                   | ギルドごとの設定: log_channel_id、appeal_link、rejoin_link、honeypot_channel_id、active_profile、タイムスタンプ |
+| **ModuleWeights**        | `(guild_id, module_name)`                                                                                                                         | モジュールのトグル: weight (INT)、is_critical (BOOL)、is_enabled (BOOL)                                         |
+| **ThresholdActions**     | `(guild_id, pressure_tier)`                                                                                                                       | プレッシャー → アクションのマッピング: action (TEXT)、message_delete_seconds (INT)、pressure (INT)              |
+| **RegexRules**           | `(guild_id, rule_identifier)`                                                                                                                     | カスタム正規表現パターン: pattern (TEXT)、threat_weight (INT)、is_critical (BOOL)                               |
+| **ConfigProfiles**       | `(guild_id, profile_name)`                                                                                                                        | 名前付き設定スナップショット: profile_data (JSON TEXT)、is_locked (BOOL)                                        |
+| **RaidState**            | `guild_id TEXT`                                                                                                                                   | アクティブなレイドステージ、権限バックアップ JSON ブロブ、started_at                                            |
+| **MentionUserWhitelist** | `(guild_id, user_id)`                                                                                                                             | メンションガードのロールメンションフラグを免除されたユーザー (任意のロールをメンション可能)                     |
+| **MentionRoleWhitelist** | `(guild_id, role_id)`                                                                                                                             | 誰でもメンションガードのフラグなしでメンションできるロール                                                      |
+| **Indexes**              | `idx_module_weights_guild`、`idx_threshold_tier`、`idx_regex_rules_guild`、`idx_mention_user_whitelist_guild`、`idx_mention_role_whitelist_guild` | パフォーマンスインデックス                                                                                      |
+
+新しいテーブルは起動時に `CREATE TABLE IF NOT EXISTS` で自動作成されるため、既存のデータベースは手動マイグレーションなしで対応できます (カラム追加は `runMigrations()` で処理)。
 
 #### マイグレーション (`runMigrations()`)
 
@@ -350,9 +363,9 @@ messageCreate
   ↓
 2. ハニーポットチェック → トリガーされた場合は fast-track
   ↓
-3. user_profile 監査 → 乗数計算
+3. user_profile 監査 (auditAndTrackProfile) → 乗数 + フラグ状態
   ↓
-4. メンションガードチェック (fast-track でない場合) → @everyone/@here/@role 検出、動的乗数
+4. メンションガードチェック (fast-track でない場合) → @everyone/@here/@role 検出、ホワイトリスト参照、動的乗数
   ↓
 5. ベロシティチェック (fast-track でない場合) → トークン消費、マルチチャンネル検出
   ↓
@@ -375,11 +388,11 @@ messageCreate
 
 #### **3. ユーザープロフィール監査**
 
-`auditProfile(message.member)` (§5.4 参照) を呼び出す。user_profile モジュールが有効な場合、返された乗数がベロシティと正規表現の重みに適用される。無効の場合、乗数は 1.0。
+`auditAndTrackProfile(member, lang, guildId)` (§5.4 参照) を呼び出す。user_profile モジュールが有効な場合、返された乗数がベロシティと正規表現の重みに適用される。無効の場合、乗数は 1.0。フラグの `state` (`new`/`active`/`cleared`/`none`) がフラグ理由を (再) 報告するかどうかを決定する — アバターなしなどの持続的な条件は毎メッセージではなく一度だけフラグされる。
 
 #### **4. メンションガードチェック**
 
-`checkMentionGuard(message, lang)` (§5.6 参照) を呼び出す。メッセージに @everyone、@here、またはロールメンションが含まれ、ユーザーがメッセージ管理権限を持っていない場合：
+`checkMentionGuard(message, lang, whitelists)` (§5.6 参照) を呼び出す。`whitelists` は `MentionUserWhitelist`/`MentionRoleWhitelist` テーブルから `cachedAll` で読み込まれる。メッセージに @everyone、@here、またはロールメンションが含まれ、ユーザーがメッセージ管理権限を持っておらず、ホワイトリストにも登録されていない場合:
 
 - 重み = `module_weight × mention_multiplier` (mention_multiplier: 初回 3.0x、繰り返し +1.0x、上限 5.0x)
 - `mention_multiplier` はクリーンなメッセージごとに `cleanStreak × 0.1` だけ減衰
@@ -455,19 +468,22 @@ Discord API 呼び出しを try/catch でラップ — 失敗時は null を返�
 
 完全なサブコマンドルーティング (コマンドビルダーは §6.1 参照):
 
-| サブコマンド        | 説明                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------- |
-| `modules toggle`    | モジュールを有効/無効化 (ModuleWeights に upsert)                                           |
-| `modules weight`    | モジュール重みを設定 (upsert)                                                               |
-| `modules critical`  | クリティカルフラグをトグル                                                                  |
-| `thresholds assign` | プレッシャー段階 → アクションマッピングを設定                                               |
-| `regex create`      | 新規ルール作成用モーダルを開く                                                              |
-| `regex list`        | すべてのルールをプレーンテキストで一覧表示                                                  |
-| `regex edit`        | ルールデータが事前入力されたモーダルを開く                                                  |
-| `regex delete`      | 識別子でルールを削除                                                                        |
-| `honeypot set`      | ハニーポットチャンネルを設定                                                                |
-| `logchannel set`    | テレメトリログチャンネルを設定                                                              |
-| `view`              | 完全埋め込み: 一般設定、モジュール状態、しきい値、正規表現、プレッシャー → アクションマップ |
+| サブコマンド             | 説明                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `modules toggle`         | モジュールを有効/無効化 (ModuleWeights に upsert)                                           |
+| `modules weight`         | モジュール重みを設定 (upsert)                                                               |
+| `modules critical`       | クリティカルフラグをトグル                                                                  |
+| `thresholds assign`      | プレッシャー段階 → アクションマッピングを設定                                               |
+| `regex create`           | 新規ルール作成用モーダルを開く                                                              |
+| `regex list`             | すべてのルールをプレーンテキストで一覧表示                                                  |
+| `regex edit`             | ルールデータが事前入力されたモーダルを開く                                                  |
+| `regex delete`           | 識別子でルールを削除                                                                        |
+| `honeypot set`           | ハニーポットチャンネルを設定                                                                |
+| `logchannel set`         | テレメトリログチャンネルを設定                                                              |
+| `mention-whitelist user` | ユーザーをメンションホワイトリストに追加/削除 (そのユーザーは任意のロールをメンション可能)  |
+| `mention-whitelist role` | ロールをメンションホワイトリストに追加/削除 (誰でもそのロールをメンション可能)              |
+| `mention-whitelist list` | ホワイトリスト登録されたユーザーとロールを一覧表示                                          |
+| `view`                   | 完全埋め込み: 一般設定、モジュール状態、しきい値、正規表現、プレッシャー → アクションマップ |
 
 `/config view` の埋め込み:
 
@@ -479,17 +495,18 @@ Discord API 呼び出しを try/catch でラップ — 失敗時は null を返�
 - 段階、プレッシャー、アクション、削除秒数のしきい値テーブル
 - 正規表現ルール一覧 (パターンは 50 文字に切り捨て)
 - 各段階の範囲を示すプレッシャー → アクションマップ
+- メンションホワイトリストフィールド: ホワイトリスト登録されたユーザーとロールを一覧表示
 
 #### アクションコマンド (`handleActionsCommand`)
 
-| サブコマンド | 説明                                                                                           |
-| ------------ | ---------------------------------------------------------------------------------------------- |
-| `appeal`     | アピール連絡先情報を設定 (BAN の DM に表示)                                                    |
-| `rejoin`     | 再参加招待リンクを設定 (キックの DM に表示)                                                    |
-| `ban`        | オプションのメッセージ削除付き手動 BAN (権限チェック: BanMembers)                              |
-| `refresh`    | キャッシュされたすべてのギルドメンバーを `auditProfile` でスキャン、フラグ付き結果をエンキュー |
+| サブコマンド | 説明                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| `appeal`     | アピール連絡先情報を設定 (BAN の DM に表示)                                                            |
+| `rejoin`     | 再参加招待リンクを設定 (キックの DM に表示)                                                            |
+| `ban`        | オプションのメッセージ削除付き手動 BAN (権限チェック: BanMembers)                                      |
+| `refresh`    | キャッシュされたすべてのギルドメンバーを `auditAndTrackProfile` でスキャン、フラグ付き結果をエンキュー |
 
-`refresh` ハンドラーは返信を遅延 (時間がかかる可能性あり)、`interaction.guild.members.cache` を反復処理、ボット以外の各メンバーで `auditProfile` を呼び出し、理由があるもののフラグテレメトリエントリをエンキュー。
+`refresh` ハンドラーは返信を遅延 (時間がかかる可能性あり)、`interaction.guild.members.cache` を反復処理、ボット以外の各メンバーで `auditAndTrackProfile` を呼び出し、フラグテレメトリエントリをエンキュー — `state === "new"` のエントリはフラグ理由を報告し、`state === "cleared"` のエントリは解決された (以前の) 理由をフラグ解除返信で報告。
 
 #### プロフィールコマンド (`handleProfilesCommand`)
 
@@ -526,8 +543,8 @@ Discord API 呼び出しを try/catch でラップ — 失敗時は null を返�
 
 1. ボットユーザーをスキップ
 2. `user_profile` モジュールがギルドで有効かどうかをチェック
-3. 有効な場合、`auditProfile(member)` を呼び出す
-4. プロフィールに理由がある場合 (若いアカウント、アバターなし)、フラグテレメトリエントリをエンキュー
+3. 有効な場合、`auditAndTrackProfile(member, lang, guildId)` を呼び出す — 持続的なフラグ条件 (若いアカウント、アバターなし) を持つメンバーは一度だけフラグされ (state `new`)、既に追跡されているメンバーが条件を解決した状態で参加すると `cleared` テレメトリエントリが生成される
+4. state が `new` (または `cleared`) の場合、対応するフラグテレメトリエントリをエンキュー
 
 ### 4.4 モーダル送信 (`src/events/modalSubmit.js`)
 
@@ -567,7 +584,7 @@ Discord API 呼び出しを try/catch でラップ — 失敗時は null を返�
 | `TOKEN_COST_PER_ACTION`      | 1     | メッセージあたり消費されるトークン           |
 | `EXCEED_PRESSURE`            | 5     | バケット空時の適用プレッシャー               |
 | `MULTI_CHANNEL_PRESSURE`     | 30    | マルチチャンネル高速連射のプレッシャー       |
-| `MULTI_CHANNEL_WINDOW_MS`    | 10000 | マルチチャンネル検出のルックバックウィンドウ |
+| `MULTI_CHANNEL_WINDOW_MS`    | 20000 | マルチチャンネル検出のルックバックウィンドウ |
 | `MULTI_CHANNEL_THRESHOLD`    | 3     | トリガーするウィンドウ内のチャンネル数       |
 
 #### データ構造
@@ -584,8 +601,8 @@ const channelActivity = new Map();
 
 1. バケットを取得または作成 (初期トークン = 容量)
 2. 経過時間に基づいて保留中の補充を適用
-3. チャンネルアクティビティを追跡 — 10 秒ウィンドウ内のアクティブチャンネル数をカウント
-4. 3 チャンネル以上アクティブ → `{ exceeded: true, pressure: 30, multiChannel: true }` を返す
+3. チャンネルアクティビティを追跡 — 20 秒ウィンドウ内のアクティブチャンネル数をカウント
+4. 3 チャンネル以上アクティブ → トークンを消費し、`{ exceeded: true, pressure: 30, multiChannel: true }` を返す (トークン消費により、マルチチャンネルトリガーがトークン枯渇プレッシャーと二重にスタックするのを防止)
 5. トークンが不足している場合 → `{ exceeded: true, pressure: 5, multiChannel: false }` を返す
 6. それ以外の場合: 1 トークンを消費、`{ exceeded: false, pressure: 0, remaining: tokens }` を返す
 
@@ -633,9 +650,23 @@ const channelActivity = new Map();
 
 ### 5.4 ユーザープロフィール (`src/modules/userProfile.js`)
 
-GuildMember のアカウント経過日数とアバター状態を監査し、プレッシャー乗数と人間可読な理由を生成する。
+GuildMember のアカウント経過日数とアバター状態を監査し、プレッシャー乗数と人間可読な理由を生成する。また、持続的な条件が一度だけフラグされるよう、フラグ状態をインメモリで追跡する。
 
-#### `auditProfile(member)`
+```js
+// profileFlags: Map<"guildId:userId", { reasons: string[], flaggedAt: number }>
+const profileFlags = new Map();
+```
+
+#### `auditAndTrackProfile(member, lang, guildId)`
+
+`{ multiplier: number, reasons: string[], state: string }` を返す。state は次のいずれか:
+
+| 状態      | 意味                                                                                 |
+| --------- | ------------------------------------------------------------------------------------ |
+| `new`     | 条件が存在し、以前にフラグされていない — 呼び出し元がフラグ理由を報告                |
+| `active`  | 条件が存在し、既にフラグされている — 再フラグなし (アクティブ中は乗数が引き続き適用) |
+| `cleared` | 以前フラグされたユーザーの条件が解決された — フラグ解除レポート用に以前の理由を返す  |
+| `none`    | 条件なし (またはモジュール無効)                                                      |
 
 2 つの条件をチェック:
 
@@ -651,9 +682,12 @@ GuildMember のアカウント経過日数とアバター状態を監査し、�
 | 若いアカウントのみ            | 1.5 倍 |
 | 両方 (若い + アバターなし)    | 2.0 倍 |
 
-`{ multiplier: number, reasons: string[] }` を返す。
-
 `user_profile` モジュールが有効な場合、ベロシティと正規表現の重みが乗数で乗算される。無効 → 乗数は 1.0 に強制。
+
+#### メモリ管理
+
+- マップは `MAX_PROFILE_FLAG_ENTRIES` で上限が設定され、超過時は最も古いエントリ (`flaggedAt` 基準) が件数ログ付きで削除される
+- `resetProfileFlags()` — すべてのインメモリフラグ状態をクリア (テストで使用)
 
 ### 5.5 レイドプロテクション (`src/modules/raidProtection.js`)
 
@@ -734,15 +768,22 @@ GuildMember のアカウント経過日数とアバター状態を監査し、�
 const mentionState = new Map();
 ```
 
-#### `checkMentionGuard(message, lang)`
+#### `checkMentionGuard(message, lang, whitelists)`
+
+`whitelists` は `MentionUserWhitelist` / `MentionRoleWhitelist` テーブルから読み込まれた `{ userWhitelist?: Set<string>, roleWhitelist?: Set<string> }`:
+
+- `userWhitelist` — ホワイトリスト登録されたユーザーは**ロールメンション**フラグを免除 (任意のロールをメンション可能)。`@everyone`/`@here` は引き続きフラグ対象
+- `roleWhitelist` — ホワイトリスト登録されたロールは**全員**に対して免除 (誰でもそのロールをメンション可能)
+- 混合メンション (ホワイトリスト + 非ホワイトリストのロール) は非ホワイトリストのロールのみフラグ対象
 
 1. **権限チェック:** ユーザーが `ManageMessages` または `Administrator` を持っている場合 → 除外
-2. **メンション検出:** `message.mentions.everyone`、`message.mentions.here`、`message.mentions.roles` を確認
-3. **トリガーされた場合** (メンションあり + 除外なし):
+2. **ホワイトリストチェック:** ホワイトリスト登録されたロールメンションを考慮対象から除外 (上記参照)
+3. **メンション検出:** `message.mentions.everyone`、`message.mentions.here`、非ホワイトリストの `message.mentions.roles` を確認
+4. **トリガーされた場合** (メンションあり + 除外なし):
    - 初回: `multiplier = 3.0` を設定
    - 繰り返し: `multiplier += 1.0` (上限 5.0)
    - `{ triggered: true, multiplier, reasons }` を返す
-4. **トリガーされなかった場合** でアクティブな状態がある場合:
+5. **トリガーされなかった場合** でアクティブな状態がある場合:
    - `cleanStreak` を増加
    - `multiplier -= cleanStreak × 0.1` で減衰 (1.0 未満にならないようにクランプ)
    - multiplier ≤ 1.0 になったらエントリを削除
@@ -774,7 +815,7 @@ const mentionState = new Map();
 
 スラッシュコマンドビルダー: `/config` (Administrator 権限が必要)。
 
-**サブコマンドグループ:** `modules`、`thresholds`、`regex`、`honeypot`、`logchannel`
+**サブコマンドグループ:** `modules`、`thresholds`、`regex`、`honeypot`、`logchannel`、`mention-whitelist`
 **直接サブコマンド:** `view`
 
 コマンド構造:
@@ -790,6 +831,9 @@ const mentionState = new Map();
 /config regex delete <identifier>
 /config honeypot set <channel>
 /config logchannel set <channel>
+/config mention-whitelist user <add|remove> <user>
+/config mention-whitelist role <add|remove> <role>
+/config mention-whitelist list
 /config view
 ```
 
@@ -947,17 +991,20 @@ handleMessageCreate(message)
 2. honeypotTrap.checkHoneypot(message, db)
     ↓ トリガー? → applyPressure(isCritical=true) → fastTrack=true
     ↓
-3. userProfile.auditProfile(member) → { multiplier, reasons }
+3. userProfile.auditAndTrackProfile(member, lang, guildId) → { multiplier, reasons, state }
     ↓
-4. velocityBucket.consumeToken(guildId, userId, channelId)
+4. メンションホワイトリストを読み込み (cachedAll) → checkMentionGuard(message, lang, whitelists)
+    ↓ トリガー? → weight = module_weight * mention_multiplier → applyPressure
+    ↓
+5. velocityBucket.consumeToken(guildId, userId, channelId)
     ↓ 超過? → weight *= multiplier → applyPressure
     ↓
-5. regexSandbox.evaluateRegex(pattern, content) [ワーカースレッド]
+6. regexSandbox.evaluateRegex(pattern, content) [ワーカースレッド]
     ↓ マッチ? → weight = rule.threat_weight * multiplier → applyPressure
     ↓
-6. profile.reasons を flagReasons に収集
+7. profile.reasons を flagReasons に収集 (state === "new" の場合のみ)
     ↓
-7. highestAction.action が存在?
+8. highestAction.action が存在?
     ├── はい → executeSanction:
     │   ├── メッセージ削除
     │   ├── 理由を DM でユーザーに送信
@@ -966,7 +1013,8 @@ handleMessageCreate(message)
     │   └── enqueue(action, ...)
     └── いいえ → スキップ
     ↓
-8. flagReasons.length > 0? → enqueue(flag, ...)
+9. flagReasons.length > 0? → enqueue(flag, ...)
+    │   state === "cleared" → フラグ解除エントリをエンキュー (reply.flag.cleared)
     ↓
 完了 ← メッセージハンドラーが return
 ```
@@ -1023,7 +1071,7 @@ stage < 3 の各ギルド:
 
 ### 前提条件
 
-- Node.js 26 + pnpm 11.12 (corepack 経由)
+- Node.js 26 + pnpm 11.22 (corepack 経由)
 - Docker (オプション、コンテナ化されたデプロイ用)
 - インテント付き Discord ボットトークンとクライアント ID: Guilds、GuildMessages、MessageContent、GuildMembers、GuildMessageReactions、GuildModeration
 
@@ -1042,7 +1090,7 @@ pnpm dev
 docker compose up -d --build
 ```
 
-ボットは `ClientReady` 時にグローバルに 6 つのスラッシュコマンドを登録します。SQLite データは `exia_data` 名前付きボリュームに永続化されます。
+ボットは `ClientReady` 時にグローバルに 7 つのスラッシュコマンドを登録します。SQLite データは `exia_data` 名前付きボリュームに永続化されます。
 
 ### テスト
 
@@ -1052,14 +1100,14 @@ pnpm test:watch    # ウォッチモード
 pnpm lint          # Prettier チェック + ESLint
 ```
 
-現在のテストスイート (合計 125 テスト):
+現在のテストスイート (合計 139 テスト):
 
 - `pressureEngine.test.js` — applyPressure、減衰、mutex、fast-track、マルチギルド分離
-- `velocityBucket.test.js` — トークン消費、補充、マルチチャンネル検出、自動削除
+- `velocityBucket.test.js` — トークン消費、補充、マルチチャンネル検出 (20 秒ウィンドウをまたぐペース配分スパムを含む)、自動削除
 - `regexSandbox.test.js` — パターンマッチング、空コンテンツガード、タイムアウト
 - `honeypotTrap.test.js` — チャンネル検出、管理者ホワイトリスト、未設定ケース
-- `userProfile.test.js` — 乗数段階、理由生成
-- `mentionGuard.test.js` — @everyone/@here/@role トリガー、除外、エスカレーション、減衰、上限
+- `userProfile.test.js` — 乗数段階、理由生成、フラグ状態遷移 (new/active/cleared)
+- `mentionGuard.test.js` — @everyone/@here/@role トリガー、除外、ホワイトリスト動作、エスカレーション、減衰、上限
 - `telemetryQueue.test.js` — エンキュー、フラッシュ、チャンク分割、フィールド制限
 - `locale.test.js` — 翻訳、フォールバック、補間、ギルド言語解決
 - `queryCache.test.js` — キャッシング、削除、無効化

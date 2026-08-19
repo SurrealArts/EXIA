@@ -7,6 +7,30 @@
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-19
+
+### 追加
+
+- メンションホワイトリスト: 新しい `/config mention-whitelist` コマンドグループ (`user add/remove`、`role add/remove`、`list`) — ホワイトリスト登録されたユーザーはメンションガードのフラグなしで任意のロールをメンションでき、登録されたロールは誰でもメンション可能
+- 新しい `MentionUserWhitelist` と `MentionRoleWhitelist` データベーステーブル（起動時に `CREATE TABLE IF NOT EXISTS` で自動作成）と `idx_mention_user_whitelist_guild` / `idx_mention_role_whitelist_guild` インデックス
+- `/config view` 埋め込みにギルドのメンションホワイトリストを表示
+- メンションガードのホワイトリスト、ユーザープロフィールフラグ追跡、ペース配分されたマルチチャンネル検出の 14 の新しい単体テスト（合計テスト数: 139）
+
+### 修正
+
+- `user_profile` フラグが、持続的な条件（例: アバターのない正当なユーザー）でメッセージごとに再トリガーされないよう修正。フラグはギルド/ユーザーごとにインメモリで追跡され（`new` / `active` / `cleared` 状態）、条件は一度だけフラグされ、アクティブ中は乗数でプレッシャーを増幅し続け、条件が解消されると `reply.flag.cleared` テレメトリエントリがエンキューされる
+- `/actions refresh`、`guildMemberAdd`、起動時の自動リフレッシュも同じ追跡状態を使用 — スキャンごとにユーザーを再フラグする代わりに、新しいフラグとクリアされたフラグを別々にカウント/報告
+- 数秒間隔で 3 チャンネル以上にまたがって送信される GIF スパムなど、ペース配分されたマルチチャンネルスパムが 10 秒のルックバックウィンドウをすり抜けていた問題を修正。`MULTI_CHANNEL_WINDOW_MS` を 10 秒から 20 秒に延長し、マルチチャンネルトリガーがトークンを消費するようになり、トークン枯渇プレッシャーとの二重スタックを防止
+
+### 変更
+
+- `pnpm` を 11.12.0 から 11.22.0 に更新（グローバルバイナリ + `packageManager` ピン）; 依存関係オーバーライドを `pnpm-workspace.yaml` に移動（`undici`、`vite`、better-sqlite3 の `allowBuilds`）
+
+### セキュリティ
+
+- `undici` を `^6.28.0` にオーバーライドし、3 つの Dependabot 勧告を修正: GHSA-v3r7-h72x-cjcm（Cookie 属性インジェクション）、GHSA-8xcm-r25x-g524（リトライインターセプター経由のレスポンス非同期化）、GHSA-m8rv-5g2x-5cg5（blob 型 body 経由の CRLF インジェクション）
+- `vitest` を 4.1.10 から 4.1.11 に更新し、`vite` を `^8.2.1` にオーバーライド — `postcss` が 8.5.17 → 8.5.26 になり、2 つの勧告を修正: GHSA-r28c-9q8g-f849（sourceMappingURL 経由のパストラバーサル、高）、GHSA-fxqj-rqcc-2cmp（不完全な修正、中）
+
 ## [1.3.1] - 2026-07-27
 
 ### 修正
@@ -110,7 +134,8 @@
 - Docker イメージビルドとテストステップを含む CI/CD パイプライン
 - 自動依存関係更新のための Dependabot 設定
 
-[Unreleased]: https://github.com/SurrealArts/EXIA/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/SurrealArts/EXIA/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.2
 [1.3.1]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.1
 [1.3.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.0
 [1.2.1]: https://github.com/SurrealArts/EXIA/releases/tag/v1.2.1

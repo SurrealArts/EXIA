@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.3.1-blue)
+![version](https://img.shields.io/badge/version-1.3.2-blue)
 
 > **🌐 Language:** [English](README.md) · [日本語](README.ja.md)  
 > **📄 Documentation:** [English](DOCUMENTATION.md) · [日本語](DOCUMENTATION.ja.md)  
@@ -23,6 +23,7 @@ Personal notes at the end of the README file.
 - **Configuration Profiles:** Snapshot, restore, export, and import full guild configs — Standard profile applied automatically on first use
 - **Telemetry Queue:** Batched embed logging to a configurable channel, grouped by action/flag/command categories
 - **Sanctions via DM:** Users receive a direct message explaining the reason before any warn, mute, kick, or ban
+- **Mention Whitelist:** Per-guild user/role allowlist (`/config mention-whitelist`) — trusted users can ping roles, and whitelisted roles can be pinged by anyone, without mention guard flags
 
 ---
 
@@ -48,7 +49,7 @@ Audits a user's account age and avatar status. Produces a multiplier (1.0x - 2.0
 
 ### Mention Guard
 
-Detects @everyone, @here, and role mentions from non-moderator users. Applies a dynamic multiplier (3.0x - 5.0x) that escalates on repeat offenses and decays when the user sends clean messages. Exempts users with Manage Messages permission.
+Detects @everyone, @here, and role mentions from non-moderator users. Applies a dynamic multiplier (3.0x - 5.0x) that escalates on repeat offenses and decays when the user sends clean messages. Exempts users with Manage Messages permission, plus any user/role on the guild's mention whitelist.
 
 ---
 
@@ -83,7 +84,7 @@ docker compose up -d --build
 
 The bot registers 7 slash commands globally on startup:
 
-- `/config` — Manage modules, thresholds, regex rules, honeypot, log channel, and view config
+- `/config` — Manage modules, thresholds, regex rules, honeypot, log channel, mention whitelist, and view config
 - `/actions` — Appeal/rejoin links, manual ban, refresh member scan
 - `/language` — Set the guild's preferred language
 - `/profiles` — Create, list, apply, export, import, and remove config profiles (Standard locked)

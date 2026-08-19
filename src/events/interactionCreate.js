@@ -468,6 +468,116 @@ async function handleConfigCommand(interaction, db) {
     return;
   }
 
+  // /config mention-whitelist user
+  if (subcommand === "user" && subcommandGroup === "mention-whitelist") {
+    const action = interaction.options.getString("action", true);
+    const target = interaction.options.getUser("user", true);
+
+    if (action === "add") {
+      db.prepare(
+        "INSERT OR IGNORE INTO MentionUserWhitelist (guild_id, user_id) VALUES (?, ?)",
+      ).run(interaction.guildId, target.id);
+      clog(
+        console.log,
+        `${LOG_TAG} User <@${target.id}> added to mention whitelist by <@${interaction.user.id}> (guild ${interaction.guildId})`,
+      );
+      await interaction.reply({
+        content: t(lang, "reply.config.mentionWhitelist.user.add", { userId: target.id }),
+        flags: MessageFlags.Ephemeral,
+      });
+    } else {
+      db.prepare("DELETE FROM MentionUserWhitelist WHERE guild_id = ? AND user_id = ?").run(
+        interaction.guildId,
+        target.id,
+      );
+      clog(
+        console.log,
+        `${LOG_TAG} User <@${target.id}> removed from mention whitelist by <@${interaction.user.id}> (guild ${interaction.guildId})`,
+      );
+      await interaction.reply({
+        content: t(lang, "reply.config.mentionWhitelist.user.remove", { userId: target.id }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    invalidateCache();
+    return;
+  }
+
+  // /config mention-whitelist role
+  if (subcommand === "role" && subcommandGroup === "mention-whitelist") {
+    const action = interaction.options.getString("action", true);
+    const target = interaction.options.getRole("role", true);
+
+    if (action === "add") {
+      db.prepare(
+        "INSERT OR IGNORE INTO MentionRoleWhitelist (guild_id, role_id) VALUES (?, ?)",
+      ).run(interaction.guildId, target.id);
+      clog(
+        console.log,
+        `${LOG_TAG} Role <@&${target.id}> added to mention whitelist by <@${interaction.user.id}> (guild ${interaction.guildId})`,
+      );
+      await interaction.reply({
+        content: t(lang, "reply.config.mentionWhitelist.role.add", { roleId: target.id }),
+        flags: MessageFlags.Ephemeral,
+      });
+    } else {
+      db.prepare("DELETE FROM MentionRoleWhitelist WHERE guild_id = ? AND role_id = ?").run(
+        interaction.guildId,
+        target.id,
+      );
+      clog(
+        console.log,
+        `${LOG_TAG} Role <@&${target.id}> removed from mention whitelist by <@${interaction.user.id}> (guild ${interaction.guildId})`,
+      );
+      await interaction.reply({
+        content: t(lang, "reply.config.mentionWhitelist.role.remove", { roleId: target.id }),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    invalidateCache();
+    return;
+  }
+
+  // /config mention-whitelist list
+  if (subcommand === "list" && subcommandGroup === "mention-whitelist") {
+    const users = db
+      .prepare("SELECT user_id FROM MentionUserWhitelist WHERE guild_id = ? ORDER BY user_id")
+      .all(interaction.guildId);
+
+    const roles = db
+      .prepare("SELECT role_id FROM MentionRoleWhitelist WHERE guild_id = ? ORDER BY role_id")
+      .all(interaction.guildId);
+
+    const userLines = users.map((row) => `<@${row.user_id}>`).join("\n");
+    const roleLines = roles.map((row) => `<@&${row.role_id}>`).join("\n");
+
+    if (users.length === 0 && roles.length === 0) {
+      await interaction.reply({
+        content: t(lang, "reply.config.mentionWhitelist.list.none"),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const lines = [];
+    lines.push(
+      t(lang, "reply.config.mentionWhitelist.list.user", {
+        users: userLines || t(lang, "reply.config.mentionWhitelist.list.empty"),
+      }),
+    );
+    lines.push(
+      t(lang, "reply.config.mentionWhitelist.list.role", {
+        roles: roleLines || t(lang, "reply.config.mentionWhitelist.list.empty"),
+      }),
+    );
+
+    await interaction.reply({
+      content: lines.join("\n"),
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   // /config view
   if (subcommand === "view") {
     const { EmbedBuilder } = await import("discord.js");
@@ -677,6 +787,30 @@ async function handleConfigCommand(interaction, db) {
               : t(lang, "embed.config.regexRules.none"),
         },
         {
+          name: t(lang, "embed.config.mentionWhitelist"),
+          value: (() => {
+            const wlUsers = db
+              .prepare(
+                "SELECT user_id FROM MentionUserWhitelist WHERE guild_id = ? ORDER BY user_id",
+              )
+              .all(interaction.guildId);
+            const wlRoles = db
+              .prepare(
+                "SELECT role_id FROM MentionRoleWhitelist WHERE guild_id = ? ORDER BY role_id",
+              )
+              .all(interaction.guildId);
+            const userDisplay =
+              wlUsers.length > 0
+                ? wlUsers.map((r) => `<@${r.user_id}>`).join(", ")
+                : t(lang, "embed.config.mentionWhitelist.none");
+            const roleDisplay =
+              wlRoles.length > 0
+                ? wlRoles.map((r) => `<@&${r.role_id}>`).join(", ")
+                : t(lang, "embed.config.mentionWhitelist.none");
+            return `${t(lang, "embed.config.mentionWhitelist.users", { users: userDisplay })}\n${t(lang, "embed.config.mentionWhitelist.roles", { roles: roleDisplay })}`;
+          })(),
+        },
+        {
           name: t(lang, "embed.config.pressureMap"),
           value: (() => {
             if (thresholds.length === 0) {
@@ -805,7 +939,7 @@ async function handleActionsCommand(interaction, db) {
   }
 
   if (subcommand === "refresh") {
-    const { auditProfile } = await import("../modules/userProfile.js");
+    const { auditAndTrackProfile } = await import("../modules/userProfile.js");
     const { enqueue } = await import("../utils/telemetryQueue.js");
 
     const members = interaction.guild.members.cache;
@@ -829,26 +963,37 @@ async function handleActionsCommand(interaction, db) {
     const profileEnabled = mod && mod.is_enabled === 1;
 
     let flagged = 0;
+    let cleared = 0;
 
     for (const [, member] of members) {
       if (member.user.bot) {
         continue;
       }
 
-      const profile = auditProfile(member, lang);
-      if (profile.reasons.length > 0 && profileEnabled) {
+      const profile = auditAndTrackProfile(member, lang, interaction.guildId);
+      if (profile.state === "new" && profileEnabled) {
         flagged++;
         enqueue(
           "flag",
           interaction.guildId,
           `${LOG_TAG} ${t(lang, "telemetry.flag.refresh", { user: member.user.tag, userId: member.id, reasons: profile.reasons.join(", "), multiplier: profile.multiplier })}`,
         );
+      } else if (profile.state === "cleared") {
+        cleared++;
+        enqueue(
+          "flag",
+          interaction.guildId,
+          t(lang, "reply.flag.cleared", {
+            userId: member.id,
+            reasons: profile.reasons.join("; "),
+          }),
+        );
       }
     }
 
     clog(
       console.log,
-      `${LOG_TAG} Manual refresh: scanned ${members.size} members, flagged ${flagged} with multipliers (by <@${interaction.user.id}>)`,
+      `${LOG_TAG} Manual refresh: scanned ${members.size} members, flagged ${flagged} with multipliers, cleared ${cleared} (by <@${interaction.user.id}>)`,
     );
 
     await interaction.editReply(

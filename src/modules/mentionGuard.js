@@ -23,19 +23,31 @@ function getKey(guildId, userId) {
  * Applies internal multiplier decay/growth and returns whether a
  * mention_guard sanction should be applied.
  *
+ * Whitelist semantics:
+ *  - userWhitelist: users exempt from role mention flags (can ping any role).
+ *    @everyone/@here are still flagged for these users.
+ *  - roleWhitelist: roles that anyone may ping without triggering a flag.
+ *
  * @param {import('discord.js').Message} message
  * @param {string} lang
+ * @param {{ userWhitelist?: Set<string>, roleWhitelist?: Set<string> }} [whitelists]
  * @returns {{ triggered: boolean, multiplier: number, reasons: string[] }}
  */
-export function checkMentionGuard(message, lang) {
+export function checkMentionGuard(message, lang, whitelists = {}) {
   const userId = message.author.id;
   const guildId = message.guildId;
   const key = getKey(guildId, userId);
+  const userWhitelist = whitelists.userWhitelist || new Set();
+  const roleWhitelist = whitelists.roleWhitelist || new Set();
 
   const hasEveryone = message.mentions.everyone;
   const hasHere = message.mentions.here;
   const hasRoleMention = message.mentions.roles.size > 0;
-  const hasMention = hasEveryone || hasHere || hasRoleMention;
+  const authorWhitelisted = userWhitelist.has(userId);
+  const flaggedRoles = [...message.mentions.roles].filter(([id]) => !roleWhitelist.has(id));
+  const effectiveFlaggedRoles = authorWhitelisted ? [] : flaggedRoles;
+  const hasFlaggedRole = effectiveFlaggedRoles.length > 0;
+  const hasFlaggedMention = hasEveryone || hasHere || hasFlaggedRole;
 
   const member = message.member;
   const isExempt =
@@ -44,10 +56,10 @@ export function checkMentionGuard(message, lang) {
 
   clog(
     console.log,
-    `${LOG_TAG} <@${userId}> check — hasEveryone: ${hasEveryone}, hasHere: ${hasHere}, hasRoleMention: ${hasRoleMention}, isExempt: ${isExempt}`,
+    `${LOG_TAG} <@${userId}> check — hasEveryone: ${hasEveryone}, hasHere: ${hasHere}, hasRoleMention: ${hasRoleMention}, flaggedRoleMentions: ${effectiveFlaggedRoles.length}, authorWhitelisted: ${authorWhitelisted}, isExempt: ${isExempt}`,
   );
 
-  if (isExempt || !hasMention) {
+  if (isExempt || !hasFlaggedMention) {
     const entry = mentionState.get(key);
     if (entry) {
       const before = entry.multiplier;
@@ -106,7 +118,7 @@ export function checkMentionGuard(message, lang) {
   if (hasHere) {
     reasons.push(t(lang, "flag.reason.mentionHere"));
   }
-  for (const [, role] of message.mentions.roles) {
+  for (const [, role] of effectiveFlaggedRoles) {
     reasons.push(t(lang, "flag.reason.mentionRole", { roleName: role.name }));
   }
 

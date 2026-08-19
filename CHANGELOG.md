@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-19
+
+### Added
+
+- Mention whitelist: new `/config mention-whitelist` command group (`user add/remove`, `role add/remove`, `list`) — whitelisted users can ping any role without triggering mention guard flags, and whitelisted roles can be pinged by anyone
+- New `MentionUserWhitelist` and `MentionRoleWhitelist` database tables (auto-created on startup via `CREATE TABLE IF NOT EXISTS`) with `idx_mention_user_whitelist_guild` / `idx_mention_role_whitelist_guild` indexes
+- `/config view` embed now displays the mention whitelists for the guild
+- 14 new unit tests for mention guard whitelists, user profile flag tracking, and paced multi-channel detection (total test count: 139)
+
+### Fixed
+
+- `user_profile` flags no longer re-trigger on every message for persistent conditions (e.g. genuine users without an avatar). Flags are now tracked in memory per guild/user (`new` / `active` / `cleared` states): a condition is flagged once, still amplifies pressure via the multiplier while active, and a `reply.flag.cleared` telemetry entry is enqueued when it resolves
+- `/actions refresh`, `guildMemberAdd`, and startup auto-refresh now use the same tracked state — new flags and cleared flags are counted/reported separately instead of re-flagging users on every scan
+- Paced multi-channel spam (e.g. GIFs sent across 3+ channels a few seconds apart) evaded the multi-channel detection's 10-second lookback window. `MULTI_CHANNEL_WINDOW_MS` extended from 10s to 20s, and a multi-channel trigger now consumes a token, preventing the trigger from double-stacking with token-exhaustion pressure
+
+### Changed
+
+- `pnpm` updated from 11.12.0 to 11.22.0 (global binary + `packageManager` pin); dependency overrides moved to `pnpm-workspace.yaml` (`undici`, `vite`, `allowBuilds` for better-sqlite3)
+
+### Security
+
+- Override `undici` to `^6.28.0`, fixing 3 Dependabot advisories: GHSA-v3r7-h72x-cjcm (cookie attribute injection), GHSA-8xcm-r25x-g524 (response desynchronization via retry interceptor), GHSA-m8rv-5g2x-5cg5 (CRLF injection via blob-like body type)
+- `vitest` updated from 4.1.10 to 4.1.11 with a `vite` override to `^8.2.1`, pulling `postcss` 8.5.17 → 8.5.26 and fixing 2 advisories: GHSA-r28c-9q8g-f849 (path traversal via sourceMappingURL, high) and GHSA-fxqj-rqcc-2cmp (incomplete fix, medium)
+
 ## [1.3.1] - 2026-07-27
 
 ### Fixed
@@ -110,7 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD pipeline with Docker image build and test step
 - Dependabot configuration for automated dependency updates
 
-[Unreleased]: https://github.com/SurrealArts/EXIA/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/SurrealArts/EXIA/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.2
 [1.3.1]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.1
 [1.3.0]: https://github.com/SurrealArts/EXIA/releases/tag/v1.3.0
 [1.2.1]: https://github.com/SurrealArts/EXIA/releases/tag/v1.2.1

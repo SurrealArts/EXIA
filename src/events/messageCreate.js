@@ -3,7 +3,7 @@ import { applyPressure, acquireMutex, releaseMutex } from "../core/pressureEngin
 import { consumeToken } from "../modules/velocityBucket.js";
 import { checkHoneypot } from "../modules/honeypotTrap.js";
 import { evaluateRegex } from "../modules/regexSandbox.js";
-import { auditProfile } from "../modules/userProfile.js";
+import { auditAndTrackProfile } from "../modules/userProfile.js";
 import { checkMentionGuard } from "../modules/mentionGuard.js";
 import { recordSpike } from "../modules/raidProtection.js";
 import { enqueue } from "../utils/telemetryQueue.js";
@@ -93,17 +93,27 @@ export default async function handleMessageCreate(message) {
   const profileMod = weightMap.get("user_profile");
   const profileMember = message.member;
   const profile = profileMember
-    ? auditProfile(profileMember, lang)
-    : { multiplier: 1, reasons: [] };
+    ? auditAndTrackProfile(profileMember, lang, guildId)
+    : { multiplier: 1, reasons: [], state: "none" };
   const profileEnabled = profileMod && profileMod.weight >= 0 && profileMember !== null;
   const multiplier = profileEnabled ? profile.multiplier : 1.0;
   clog(
     console.log,
-    `${LOG_TAG} user_profile module enabled: ${profileEnabled} | multiplier: ${multiplier}x | profile reasons: [${profile.reasons.join(", ")}]`,
+    `${LOG_TAG} user_profile module enabled: ${profileEnabled} | multiplier: ${multiplier}x | state: ${profile.state} | profile reasons: [${profile.reasons.join(", ")}]`,
   );
 
   if (!isFastTrack) {
-    const mentionCheck = checkMentionGuard(message, lang);
+    const userWhitelist = new Set(
+      cachedAll(db, "SELECT user_id FROM MentionUserWhitelist WHERE guild_id = ?", guildId).map(
+        (row) => row.user_id,
+      ),
+    );
+    const roleWhitelist = new Set(
+      cachedAll(db, "SELECT role_id FROM MentionRoleWhitelist WHERE guild_id = ?", guildId).map(
+        (row) => row.role_id,
+      ),
+    );
+    const mentionCheck = checkMentionGuard(message, lang, { userWhitelist, roleWhitelist });
     clog(
       console.log,
       `${LOG_TAG} MentionGuard — triggered: ${mentionCheck.triggered}, multiplier: ${mentionCheck.multiplier}x, reasons: [${mentionCheck.reasons.join(", ")}]`,
@@ -162,13 +172,12 @@ export default async function handleMessageCreate(message) {
           highestAction = velocityResult;
         }
         flagReasons.push(
-          velResult.multiChannel ? t(lang, "flag.reason.multiChannel") : t(lang, "flag.reason.speed"),
+          velResult.multiChannel
+            ? t(lang, "flag.reason.multiChannel")
+            : t(lang, "flag.reason.speed"),
         );
       } else {
-        clog(
-          console.log,
-          `${LOG_TAG} Skipping velocity pressure for ${userId}: not moderatable`,
-        );
+        clog(console.log, `${LOG_TAG} Skipping velocity pressure for ${userId}: not moderatable`);
       }
     }
   }
@@ -203,20 +212,27 @@ export default async function handleMessageCreate(message) {
           }
           flagReasons.push(t(lang, "flag.reason.regex", { ruleIdentifier: rule.rule_identifier }));
         } else {
-          clog(
-            console.log,
-            `${LOG_TAG} Skipping regex pressure for ${userId}: not moderatable`,
-          );
+          clog(console.log, `${LOG_TAG} Skipping regex pressure for ${userId}: not moderatable`);
         }
         break;
       }
     }
   }
 
-  if (profile.reasons.length > 0) {
+  if (profile.state === "new") {
     const profileReasons = [...profile.reasons];
     flagReasons.push(...profileReasons);
-    clog(console.log, `${LOG_TAG} Profile flags: ${profileReasons.join("; ")}`);
+    clog(console.log, `${LOG_TAG} Profile flags (new): ${profileReasons.join("; ")}`);
+  } else if (profile.state === "cleared") {
+    enqueue(
+      "flag",
+      guildId,
+      t(lang, "reply.flag.cleared", { userId, reasons: profile.reasons.join("; ") }),
+    );
+    clog(
+      console.log,
+      `${LOG_TAG} Profile flags cleared for ${userId}: ${profile.reasons.join("; ")}`,
+    );
   }
 
   if (highestAction && highestAction.action) {

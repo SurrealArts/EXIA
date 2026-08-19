@@ -1,8 +1,8 @@
 # EXIA — Full Project Documentation
 
-**Version:** 1.3.1  
+**Version:** 1.3.2  
 **Stack:** Node.js 26 + Discord.js v14 + better-sqlite3 (SQLite, WAL mode)  
-**Package Manager:** pnpm 11.12 (ESM-only)  
+**Package Manager:** pnpm 11.22 (ESM-only)  
 **Entry Point:** `src/index.js`
 
 ---
@@ -68,7 +68,7 @@ EXIA/
 │   ├── config/
 │   │   └── config.js                 # dotenv-flow loader, env validation, exports
 │   ├── core/
-│   │   ├── database.js               # SQLite init, 7 tables, migrations, Standard profile
+│   │   ├── database.js               # SQLite init, 9 tables, migrations, Standard profile
 │   │   ├── locale.js                 # i18n: t(), getGuildLanguage(), resolveInteractionLang()
 │   │   ├── locale.test.js            # Vitest suite for locale
 │   │   ├── pressureEngine.js         # In-memory pressure scores, decay, mutex, fast-track
@@ -118,7 +118,7 @@ EXIA/
 ├── LICENSE                           # MIT License
 ├── package.json                      # Project manifest, scripts, dependencies
 ├── pnpm-lock.yaml                    # Lockfile
-├── pnpm-workspace.yaml               # Pnpm workspace config (single project)
+├── pnpm-workspace.yaml               # Pnpm settings: overrides, allowed build scripts
 ├── README.ja.md                      # Japanese user-facing guide
 └── README.md                         # User-facing intro and deployment guide
 ```
@@ -130,14 +130,14 @@ EXIA/
 ### Runtime
 
 - **Node.js:** 26 (LTS)
-- **Package Manager:** pnpm 11.12 (via `corepack`)
+- **Package Manager:** pnpm 11.22 (via `corepack`)
 - **Module System:** ESM (`"type": "module"` in package.json)
 
 ### Dependencies
 
 | Package          | Version  | Purpose                                                   |
 | ---------------- | -------- | --------------------------------------------------------- |
-| `discord.js`     | ^14.26.5 | Discord API client + interaction framework                |
+| `discord.js`     | ^14.27.0 | Discord API client + interaction framework                |
 | `better-sqlite3` | ^12.11.1 | Synchronous SQLite3 binding (WAL mode)                    |
 | `dotenv-flow`    | ^4.1.0   | `.env` loading with environment-specific override support |
 
@@ -147,7 +147,7 @@ EXIA/
 | ----------------- | --------------------- |
 | `eslint` ^10.7.0  | Linting (flat config) |
 | `prettier` ^3.9.5 | Code formatting       |
-| `vitest` ^4.1.10  | Test runner           |
+| `vitest` ^4.1.11  | Test runner           |
 | `globals` ^17.7.0 | ESLint globals        |
 
 ### Scripts
@@ -177,6 +177,15 @@ Workflow: `.github/workflows/docker-image.yml`
 - **npm** ecosystem (root directory) — production and dev dependencies grouped separately, minor/patch only
 - **docker** ecosystem (root directory)
 
+### Dependency Overrides (`pnpm-workspace.yaml`)
+
+pnpm 11 reads settings from `pnpm-workspace.yaml` (the `pnpm` field in package.json is no longer read):
+
+- `overrides.undici: ^6.28.0` — forces the patched undici version for `@discordjs/rest` (Dependabot advisories)
+- `overrides.vite: ^8.2.1` — forces a vite version that pulls `postcss >= 8.5.23` (Dependabot advisories)
+- `allowBuilds.better-sqlite3: true` — allows better-sqlite3's native build script (required, otherwise `pnpm run` exits with `ERR_PNPM_IGNORED_BUILDS`)
+- `minimumReleaseAgeExclude` (`vitest`, `@vitest/*`) — dev-only test toolchain exempted from pnpm 11.22's built-in 24-hour `minimumReleaseAge` supply-chain gate, which would otherwise fail lockfile verification right after a vitest release
+
 ---
 
 ## 3. Core Engine
@@ -191,20 +200,24 @@ Initializes a **better-sqlite3** connection in **WAL mode** with foreign keys en
 2. Ensures `data/` directory exists (`mkdirSync` recursive)
 3. Opens database at `data/exia.db`
 4. Sets `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`
-5. Calls `createTables()` — creates 7 tables if not exist
+5. Calls `createTables()` — creates 9 tables if not exist
 6. Calls `runMigrations()` — applies incremental schema migrations
 
 #### Tables
 
-| Table                  | Primary Key                                                               | Description                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **GuildConfiguration** | `guild_id TEXT`                                                           | Per-guild settings: log_channel_id, appeal_link, rejoin_link, honeypot_channel_id, active_profile, timestamps |
-| **ModuleWeights**      | `(guild_id, module_name)`                                                 | Module toggles: weight (INT), is_critical (BOOL), is_enabled (BOOL)                                           |
-| **ThresholdActions**   | `(guild_id, pressure_tier)`                                               | Pressure → action mapping: action (TEXT), message_delete_seconds (INT), pressure (INT)                        |
-| **RegexRules**         | `(guild_id, rule_identifier)`                                             | Custom regex patterns: pattern (TEXT), threat_weight (INT), is_critical (BOOL)                                |
-| **ConfigProfiles**     | `(guild_id, profile_name)`                                                | Named config snapshots: profile_data (JSON TEXT), is_locked (BOOL)                                            |
-| **RaidState**          | `guild_id TEXT`                                                           | Active raid stage, permission backup JSON blob, started_at                                                    |
-| **Indexes**            | `idx_module_weights_guild`, `idx_threshold_tier`, `idx_regex_rules_guild` | Performance indexes                                                                                           |
+| Table                    | Primary Key                                                                                                                                       | Description                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **GuildConfiguration**   | `guild_id TEXT`                                                                                                                                   | Per-guild settings: log_channel_id, appeal_link, rejoin_link, honeypot_channel_id, active_profile, timestamps |
+| **ModuleWeights**        | `(guild_id, module_name)`                                                                                                                         | Module toggles: weight (INT), is_critical (BOOL), is_enabled (BOOL)                                           |
+| **ThresholdActions**     | `(guild_id, pressure_tier)`                                                                                                                       | Pressure → action mapping: action (TEXT), message_delete_seconds (INT), pressure (INT)                        |
+| **RegexRules**           | `(guild_id, rule_identifier)`                                                                                                                     | Custom regex patterns: pattern (TEXT), threat_weight (INT), is_critical (BOOL)                                |
+| **ConfigProfiles**       | `(guild_id, profile_name)`                                                                                                                        | Named config snapshots: profile_data (JSON TEXT), is_locked (BOOL)                                            |
+| **RaidState**            | `guild_id TEXT`                                                                                                                                   | Active raid stage, permission backup JSON blob, started_at                                                    |
+| **MentionUserWhitelist** | `(guild_id, user_id)`                                                                                                                             | Users exempt from mention guard role-ping flags (can ping any role)                                           |
+| **MentionRoleWhitelist** | `(guild_id, role_id)`                                                                                                                             | Roles that anyone may mention without mention guard flags                                                     |
+| **Indexes**              | `idx_module_weights_guild`, `idx_threshold_tier`, `idx_regex_rules_guild`, `idx_mention_user_whitelist_guild`, `idx_mention_role_whitelist_guild` | Performance indexes                                                                                           |
+
+New tables are auto-created on startup via `CREATE TABLE IF NOT EXISTS`, so existing databases pick them up without manual migration (column additions go through `runMigrations()`).
 
 #### Migrations (`runMigrations()`)
 
@@ -350,9 +363,9 @@ messageCreate
   ↓
 2. Honeypot check → fast-track if triggered
   ↓
-3. user_profile audit → multiplier calculation
+3. user_profile audit (auditAndTrackProfile) → multiplier + flag state
    ↓
-4. Mention guard check (unless fast-track) → @everyone/@here/@role detection, dynamic multiplier
+4. Mention guard check (unless fast-track) → @everyone/@here/@role detection, whitelist lookup, dynamic multiplier
    ↓
 5. Velocity check (unless fast-track) → token consumption, multi-channel detection
    ↓
@@ -375,11 +388,11 @@ Calls `checkHoneypot(message, db)` (see §5.3). If triggered and not whitelisted
 
 #### **3. User Profile Audit**
 
-Calls `auditProfile(message.member)` (see §5.4). If the user_profile module is enabled, the returned multiplier is applied to velocity and regex weights. If disabled, multiplier is 1.0.
+Calls `auditAndTrackProfile(member, lang, guildId)` (see §5.4). If the user_profile module is enabled, the returned multiplier is applied to velocity and regex weights. If disabled, multiplier is 1.0. The flag `state` (`new`/`active`/`cleared`/`none`) drives whether flag reasons are (re)reported — persistent conditions like a missing avatar are flagged once, not on every message.
 
 #### **4. Mention Guard Check**
 
-Calls `checkMentionGuard(message, lang)` (see §5.6). If the message contains @everyone, @here, or role mentions and the user lacks Manage Messages permission:
+Calls `checkMentionGuard(message, lang, whitelists)` (see §5.6) where `whitelists` are loaded from the `MentionUserWhitelist`/`MentionRoleWhitelist` tables via `cachedAll`. If the message contains @everyone, @here, or role mentions and the user lacks Manage Messages permission and is not whitelisted:
 
 - Weight = `module_weight × mention_multiplier` (mention_multiplier: 3.0x first offense, +1.0x per repeat, cap 5.0x)
 - `mention_multiplier` decays by `cleanStreak × 0.1` per clean message
@@ -455,19 +468,22 @@ Routes all slash commands, autocomplete interactions, and the debug handler.
 
 Full subcommand routing (see §6.1 for command builder):
 
-| Subcommand          | Description                                                                       |
-| ------------------- | --------------------------------------------------------------------------------- |
-| `modules toggle`    | Enables/disables a module (upsert into ModuleWeights)                             |
-| `modules weight`    | Sets module weight (upsert)                                                       |
-| `modules critical`  | Toggles critical flag                                                             |
-| `thresholds assign` | Sets pressure tier → action mapping                                               |
-| `regex create`      | Opens modal for new rule creation                                                 |
-| `regex list`        | Lists all rules as plain text                                                     |
-| `regex edit`        | Opens modal pre-filled with rule data                                             |
-| `regex delete`      | Deletes rule by identifier                                                        |
-| `honeypot set`      | Sets honeypot channel                                                             |
-| `logchannel set`    | Sets telemetry log channel                                                        |
-| `view`              | Full embed: general config, module status, thresholds, regex, pressure→action map |
+| Subcommand               | Description                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `modules toggle`         | Enables/disables a module (upsert into ModuleWeights)                             |
+| `modules weight`         | Sets module weight (upsert)                                                       |
+| `modules critical`       | Toggles critical flag                                                             |
+| `thresholds assign`      | Sets pressure tier → action mapping                                               |
+| `regex create`           | Opens modal for new rule creation                                                 |
+| `regex list`             | Lists all rules as plain text                                                     |
+| `regex edit`             | Opens modal pre-filled with rule data                                             |
+| `regex delete`           | Deletes rule by identifier                                                        |
+| `honeypot set`           | Sets honeypot channel                                                             |
+| `logchannel set`         | Sets telemetry log channel                                                        |
+| `mention-whitelist user` | Adds/removes a user to the mention whitelist (that user may ping any role)        |
+| `mention-whitelist role` | Adds/removes a role to the mention whitelist (anyone may ping that role)          |
+| `mention-whitelist list` | Lists whitelisted users and roles                                                 |
+| `view`                   | Full embed: general config, module status, thresholds, regex, pressure→action map |
 
 The `/config view` embed:
 
@@ -479,17 +495,18 @@ The `/config view` embed:
 - Thresholds table with tier, pressure, action, delete-seconds
 - Regex rules list (pattern truncated to 50 chars)
 - Pressure → Action Map showing each tier's range
+- Mention whitelist field: lists whitelisted users and roles
 
 #### Actions Command (`handleActionsCommand`)
 
-| Subcommand | Description                                                                  |
-| ---------- | ---------------------------------------------------------------------------- |
-| `appeal`   | Sets appeal contact info (shown in ban DM)                                   |
-| `rejoin`   | Sets rejoin invite link (shown in kick DM)                                   |
-| `ban`      | Manual ban with optional message deletion (permission check: BanMembers)     |
-| `refresh`  | Scans all cached guild members with `auditProfile`, enqueues flagged results |
+| Subcommand | Description                                                                          |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `appeal`   | Sets appeal contact info (shown in ban DM)                                           |
+| `rejoin`   | Sets rejoin invite link (shown in kick DM)                                           |
+| `ban`      | Manual ban with optional message deletion (permission check: BanMembers)             |
+| `refresh`  | Scans all cached guild members with `auditAndTrackProfile`, enqueues flagged results |
 
-The `refresh` handler defers reply (may take time), iterates `interaction.guild.members.cache`, calls `auditProfile` on each non-bot member, and enqueues flag telemetry entries for those with reasons.
+The `refresh` handler defers reply (may take time), iterates `interaction.guild.members.cache`, calls `auditAndTrackProfile` on each non-bot member, and enqueues flag telemetry entries — `state === "new"` entries report the flag reasons, `state === "cleared"` entries report the resolved (prior) reasons via the cleared-flag reply.
 
 #### Profiles Command (`handleProfilesCommand`)
 
@@ -526,8 +543,8 @@ Fires when a new member joins a guild:
 
 1. Skips bot users
 2. Checks if `user_profile` module is enabled for the guild
-3. If enabled, calls `auditProfile(member)`
-4. If profile has reasons (young account, no avatar), enqueues a flag telemetry entry
+3. If enabled, calls `auditAndTrackProfile(member, lang, guildId)` — a member joining with persistent flag conditions (young account, no avatar) is only flagged once (state `new`), and already-tracked members who join with a resolved condition produce a `cleared` telemetry entry
+4. If state is `new` (or `cleared`), enqueues the corresponding flag telemetry entry
 
 ### 4.4 Modal Submit (`src/events/modalSubmit.js`)
 
@@ -567,7 +584,7 @@ Token-bucket rate limiter. Each user (per guild) has a token bucket. Tokents ref
 | `TOKEN_COST_PER_ACTION`      | 1     | Tokens consumed per message                 |
 | `EXCEED_PRESSURE`            | 5     | Pressure applied when bucket empty          |
 | `MULTI_CHANNEL_PRESSURE`     | 30    | Pressure for multi-channel rapid-fire       |
-| `MULTI_CHANNEL_WINDOW_MS`    | 10000 | Lookback window for multi-channel detection |
+| `MULTI_CHANNEL_WINDOW_MS`    | 20000 | Lookback window for multi-channel detection |
 | `MULTI_CHANNEL_THRESHOLD`    | 3     | Number of channels in window to trigger     |
 
 #### Data Structures
@@ -584,8 +601,8 @@ const channelActivity = new Map();
 
 1. Gets or creates bucket (initial tokens = capacity)
 2. Applies pending refills based on elapsed time
-3. Tracks channel activity — counts active channels in 10s window
-4. If ≥3 channels active → returns `{ exceeded: true, pressure: 30, multiChannel: true }`
+3. Tracks channel activity — counts active channels in 20s window
+4. If ≥3 channels active → consumes a token, returns `{ exceeded: true, pressure: 30, multiChannel: true }` (the token consumption prevents the multi-channel trigger from stacking with token-exhaustion pressure)
 5. If tokens are insufficient → returns `{ exceeded: true, pressure: 5, multiChannel: false }`
 6. Otherwise: consumes 1 token, returns `{ exceeded: false, pressure: 0, remaining: tokens }`
 
@@ -633,9 +650,23 @@ The caller (messageCreate.js) only acts on `triggered && !whitelisted`.
 
 ### 5.4 User Profile (`src/modules/userProfile.js`)
 
-Audits a GuildMember's account age and avatar status to produce a pressure multiplier and human-readable reasons.
+Audits a GuildMember's account age and avatar status to produce a pressure multiplier and human-readable reasons, and tracks flag state in memory so persistent conditions are only flagged once.
 
-#### `auditProfile(member)`
+```js
+// profileFlags: Map<"guildId:userId", { reasons: string[], flaggedAt: number }>
+const profileFlags = new Map();
+```
+
+#### `auditAndTrackProfile(member, lang, guildId)`
+
+Returns `{ multiplier: number, reasons: string[], state: string }` where state is one of:
+
+| State     | Meaning                                                                                              |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| `new`     | Conditions present and not previously flagged — caller reports flag reasons                          |
+| `active`  | Conditions present and already flagged — no re-flagging (multiplier still applies while active)      |
+| `cleared` | Conditions resolved for a previously flagged user — returns the prior reasons for a "cleared" report |
+| `none`    | No conditions (or module disabled)                                                                   |
 
 Checks two conditions:
 
@@ -651,9 +682,12 @@ Checks two conditions:
 | Young account only               | 1.5x       |
 | Both (young + no avatar)         | 2.0x       |
 
-Returns `{ multiplier: number, reasons: string[] }`.
-
 When `user_profile` module is enabled, velocity and regex weights are multiplied by the multiplier. Disabled → multiplier is forced to 1.0.
+
+#### Memory Management
+
+- The map is capped at `MAX_PROFILE_FLAG_ENTRIES` — on overflow the oldest entries (by `flaggedAt`) are evicted with a count log
+- `resetProfileFlags()` — Clears all in-memory flag state (used by tests)
 
 ### 5.5 Raid Protection (`src/modules/raidProtection.js`)
 
@@ -734,15 +768,22 @@ Detects @everyone, @here, and role mentions from non-moderator users. Exempts us
 const mentionState = new Map();
 ```
 
-#### `checkMentionGuard(message, lang)`
+#### `checkMentionGuard(message, lang, whitelists)`
+
+`whitelists` is `{ userWhitelist?: Set<string>, roleWhitelist?: Set<string> }` loaded from the `MentionUserWhitelist` / `MentionRoleWhitelist` tables:
+
+- `userWhitelist` — whitelisted users are exempt from **role mention** flags (may ping any role). `@everyone`/`@here` are still flagged for them
+- `roleWhitelist` — whitelisted roles are exempt for **everyone** (anyone may ping those roles)
+- Mixed pings (whitelisted + non-whitelisted roles) flag only the non-whitelisted roles
 
 1. **Permission check:** If user has `ManageMessages` or `Administrator` → exempt
-2. **Mention detection:** Checks `message.mentions.everyone`, `message.mentions.here`, `message.mentions.roles`
-3. **If triggered** (mention found + not exempt):
+2. **Whitelist check:** Non-whitelisted role mentions are removed from consideration (see above)
+3. **Mention detection:** Checks `message.mentions.everyone`, `message.mentions.here`, and non-whitelisted `message.mentions.roles`
+4. **If triggered** (mention found + not exempt):
    - First offense: sets `multiplier = 3.0`
    - Repeat: `multiplier += 1.0` (cap 5.0)
    - Returns `{ triggered: true, multiplier, reasons }`
-4. **If not triggered** but user has active state:
+5. **If not triggered** but user has active state:
    - Increments `cleanStreak`
    - Decays `multiplier -= cleanStreak × 0.1` (clamped to ≥ 1.0)
    - Removes entry when multiplier ≤ 1.0
@@ -774,7 +815,7 @@ The multiplier is **independent** of the user_profile multiplier — profile_mul
 
 Slash command builder: `/config` (Administrator permission required).
 
-**Subcommand groups:** `modules`, `thresholds`, `regex`, `honeypot`, `logchannel`
+**Subcommand groups:** `modules`, `thresholds`, `regex`, `honeypot`, `logchannel`, `mention-whitelist`
 **Direct subcommand:** `view`
 
 Command structure:
@@ -790,6 +831,9 @@ Command structure:
 /config regex delete <identifier>
 /config honeypot set <channel>
 /config logchannel set <channel>
+/config mention-whitelist user <add|remove> <user>
+/config mention-whitelist role <add|remove> <role>
+/config mention-whitelist list
 /config view
 ```
 
@@ -947,17 +991,20 @@ handleMessageCreate(message)
 2. honeypotTrap.checkHoneypot(message, db)
     ↓ triggered? → applyPressure(isCritical=true) → fastTrack=true
     ↓
-3. userProfile.auditProfile(member) → { multiplier, reasons }
+3. userProfile.auditAndTrackProfile(member, lang, guildId) → { multiplier, reasons, state }
     ↓
-4. velocityBucket.consumeToken(guildId, userId, channelId)
+4. Load mention whitelists (cachedAll) → checkMentionGuard(message, lang, whitelists)
+    ↓ triggered? → weight = module_weight * mention_multiplier → applyPressure
+    ↓
+5. velocityBucket.consumeToken(guildId, userId, channelId)
     ↓ exceeded? → weight *= multiplier → applyPressure
     ↓
-5. regexSandbox.evaluateRegex(pattern, content) [worker thread]
+6. regexSandbox.evaluateRegex(pattern, content) [worker thread]
     ↓ matched? → weight = rule.threat_weight * multiplier → applyPressure
     ↓
-6. Collect profile.reasons into flagReasons
+7. Collect profile.reasons into flagReasons (only when state === "new")
     ↓
-7. highestAction.action exists?
+8. highestAction.action exists?
     ├── Yes → executeSanction:
     │   ├── delete message
     │   ├── DM user with reason(s)
@@ -966,7 +1013,8 @@ handleMessageCreate(message)
     │   └── enqueue(action, ...)
     └── No  → skip
     ↓
-8. flagReasons.length > 0? → enqueue(flag, ...)
+9. flagReasons.length > 0? → enqueue(flag, ...)
+    │   state === "cleared" → enqueue cleared-flag entry (reply.flag.cleared)
     ↓
 Done. ← message handler returns
 ```
@@ -1023,7 +1071,7 @@ for each guild with stage < 3:
 
 ### Prerequisites
 
-- Node.js 26 + pnpm 11.12 (via corepack)
+- Node.js 26 + pnpm 11.22 (via corepack)
 - Docker (optional, for containerized deployment)
 - Discord bot token and client ID with intents: Guilds, GuildMessages, MessageContent, GuildMembers, GuildMessageReactions, GuildModeration
 
@@ -1042,7 +1090,7 @@ pnpm dev
 docker compose up -d --build
 ```
 
-The bot registers 6 slash commands globally on `ClientReady`. SQLite data persists in the `exia_data` named volume.
+The bot registers 7 slash commands globally on `ClientReady`. SQLite data persists in the `exia_data` named volume.
 
 ### Testing
 
@@ -1052,14 +1100,14 @@ pnpm test:watch    # Watch mode
 pnpm lint          # Prettier check + ESLint
 ```
 
-Current test suites (125 tests total):
+Current test suites (139 tests total):
 
 - `pressureEngine.test.js` — applyPressure, decay, mutex, fast-track, multi-guild isolation
-- `velocityBucket.test.js` — token consumption, refill, multi-channel detection, auto-removal
+- `velocityBucket.test.js` — token consumption, refill, multi-channel detection (incl. paced spam across the 20s window), auto-removal
 - `regexSandbox.test.js` — pattern matching, empty content guard, timeout
 - `honeypotTrap.test.js` — channel detection, admin whitelist, no-config case
-- `userProfile.test.js` — multiplier tiers, reason generation
-- `mentionGuard.test.js` — @everyone/@here/@role trigger, exemption, escalation, decay, cap
+- `userProfile.test.js` — multiplier tiers, reason generation, flag state transitions (new/active/cleared)
+- `mentionGuard.test.js` — @everyone/@here/@role trigger, exemption, whitelist behavior, escalation, decay, cap
 - `telemetryQueue.test.js` — enqueue, flush, chunking, field limits
 - `locale.test.js` — translation, fallback, interpolation, guild language resolution
 - `queryCache.test.js` — caching, eviction, invalidation

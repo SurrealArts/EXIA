@@ -1,4 +1,4 @@
-import { auditProfile } from "../modules/userProfile.js";
+import { auditAndTrackProfile } from "../modules/userProfile.js";
 import { getDatabase } from "../core/database.js";
 import { enqueue } from "../utils/telemetryQueue.js";
 import { clog } from "../utils/clog.js";
@@ -40,13 +40,13 @@ export default async function handleGuildMemberAdd(member) {
     return;
   }
 
-  const profile = auditProfile(member, lang);
+  const profile = auditAndTrackProfile(member, lang, member.guild.id);
   clog(
     console.log,
-    `${LOG_TAG} <@${member.user.id}> audit complete — multiplier: ${profile.multiplier}x, flagged: ${profile.reasons.length > 0}`,
+    `${LOG_TAG} <@${member.user.id}> audit complete — multiplier: ${profile.multiplier}x, state: ${profile.state}, flagged: ${profile.reasons.length > 0}`,
   );
 
-  if (profile.reasons.length > 0) {
+  if (profile.state === "new") {
     clog(
       console.log,
       `${LOG_TAG} <@${member.user.id}> flagged on join — reasons: ${profile.reasons.join("; ")}, multiplier: ${profile.multiplier}x`,
@@ -58,6 +58,19 @@ export default async function handleGuildMemberAdd(member) {
         userId: member.user.id,
         reasons: profile.reasons.join("; "),
         multiplier: profile.multiplier,
+      }),
+    );
+  } else if (profile.state === "cleared") {
+    clog(
+      console.log,
+      `${LOG_TAG} <@${member.user.id}> profile flags cleared on join — was: ${profile.reasons.join("; ")}`,
+    );
+    enqueue(
+      "flag",
+      member.guild.id,
+      t(lang, "reply.flag.cleared", {
+        userId: member.user.id,
+        reasons: profile.reasons.join("; "),
       }),
     );
   }

@@ -1,2 +1,11 @@
+overrides:
+  undici: ^6.28.0
+  vite: ^8.2.1
+
 allowBuilds:
   better-sqlite3: true
+
+# Dev-only test toolchain — exempt from the 24h minimumReleaseAge gate
+minimumReleaseAgeExclude:
+  - vitest
+  - "@vitest/*"

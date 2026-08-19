@@ -14,16 +14,27 @@ const USER_ID = "user_1";
  * @param {object} opts
  * @param {boolean} opts.everyone
  * @param {boolean} opts.here
- * @param {string[]} opts.roleMentions - role names
+ * @param {(string|{id: string, name: string})[]} opts.roleMentions - role names or {id, name} objects
  * @param {bigint} [opts.permissions] - member permissions bitfield
+ * @param {string} [opts.userId] - message author id
  */
-function makeMessage({ everyone = false, here = false, roleMentions = [], permissions = 0n } = {}) {
+function makeMessage({
+  everyone = false,
+  here = false,
+  roleMentions = [],
+  permissions = 0n,
+  userId = USER_ID,
+} = {}) {
   const roles = new Map();
-  for (const name of roleMentions) {
-    roles.set(name, { name });
+  for (const entry of roleMentions) {
+    if (typeof entry === "string") {
+      roles.set(entry, { name: entry });
+    } else {
+      roles.set(entry.id, { name: entry.name });
+    }
   }
   return {
-    author: { id: USER_ID },
+    author: { id: userId },
     guildId: GUILD_ID,
     mentions: {
       everyone,
@@ -226,5 +237,59 @@ describe("checkMentionGuard", () => {
     };
     const result2 = checkMentionGuard(msg2, "en");
     expect(result2.multiplier).toBe(3.0); // independent state
+  });
+});
+
+describe("checkMentionGuard with whitelists", () => {
+  beforeEach(() => {
+    resetMentionState();
+  });
+
+  it("does not trigger when a whitelisted user pings a role", () => {
+    const msg = makeMessage({ roleMentions: ["Moderators"] });
+    const result = checkMentionGuard(msg, "en", { userWhitelist: new Set([USER_ID]) });
+    expect(result.triggered).toBe(false);
+    expect(result.reasons).toHaveLength(0);
+  });
+
+  it("still triggers when a whitelisted user pings @everyone", () => {
+    const msg = makeMessage({ everyone: true, roleMentions: ["Moderators"] });
+    const result = checkMentionGuard(msg, "en", { userWhitelist: new Set([USER_ID]) });
+    expect(result.triggered).toBe(true);
+    expect(result.reasons).toContain("mentioned @everyone");
+    expect(result.reasons).not.toContain("mentioned @Moderators");
+  });
+
+  it("does not trigger when anyone pings a whitelisted role", () => {
+    const msg = makeMessage({ roleMentions: [{ id: "role_1", name: "QOTD" }] });
+    const result = checkMentionGuard(msg, "en", { roleWhitelist: new Set(["role_1"]) });
+    expect(result.triggered).toBe(false);
+    expect(result.reasons).toHaveLength(0);
+  });
+
+  it("flags only non-whitelisted roles in a mixed ping", () => {
+    const msg = makeMessage({
+      roleMentions: [
+        { id: "role_1", name: "QOTD" },
+        { id: "role_2", name: "Admins" },
+      ],
+    });
+    const result = checkMentionGuard(msg, "en", {
+      roleWhitelist: new Set(["role_1"]),
+      userWhitelist: new Set(),
+    });
+    expect(result.triggered).toBe(true);
+    expect(result.reasons).toHaveLength(1);
+    expect(result.reasons).toContain("mentioned @Admins");
+  });
+
+  it("whitelisted roles decay the user's mention state like clean messages", () => {
+    const trigger = makeMessage({ roleMentions: ["Moderators"] });
+    expect(checkMentionGuard(trigger, "en").multiplier).toBe(3.0);
+
+    const safePing = makeMessage({ roleMentions: [{ id: "role_1", name: "QOTD" }] });
+    const result = checkMentionGuard(safePing, "en", { roleWhitelist: new Set(["role_1"]) });
+    expect(result.triggered).toBe(false);
+    expect(getMentionMultiplier(GUILD_ID, USER_ID)).toBeCloseTo(2.9);
   });
 });

@@ -8,7 +8,7 @@ const DEFAULT_REFILL_INTERVAL_MS = 1_000;
 const TOKEN_COST_PER_ACTION = 1;
 const EXCEED_PRESSURE = 5;
 const MULTI_CHANNEL_PRESSURE = 30;
-const MULTI_CHANNEL_WINDOW_MS = 10_000;
+const MULTI_CHANNEL_WINDOW_MS = 20_000;
 const MULTI_CHANNEL_THRESHOLD = 3;
 const MAX_BUCKETS = 50_000;
 const MAX_CHANNEL_ACTIVITY_ENTRIES = 50_000;
@@ -161,6 +161,7 @@ export function consumeToken(guildId, userId, channelId) {
   }
 
   if (multiChannel) {
+    bucket.tokens = Math.max(0, bucket.tokens - TOKEN_COST_PER_ACTION);
     clog(
       console.log,
       `${LOG_TAG} ${key} — multi-channel rapid-fire: exceeded=true, pressure=${MULTI_CHANNEL_PRESSURE}, tokens remaining=${bucket.tokens}`,

@@ -506,6 +506,115 @@ export const configCommand = new SlashCommandBuilder()
       ),
   )
 
+  .addSubcommandGroup((group) =>
+    group
+      .setName("mention-whitelist")
+      .setDescription(t("en", "command.config.mention-whitelist.description"))
+      .setDescriptionLocalizations({
+        ja: t("ja", "command.config.mention-whitelist.description"),
+      })
+      .addSubcommand((sub) =>
+        sub
+          .setName("user")
+          .setDescription(t("en", "command.config.mention-whitelist.user.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.config.mention-whitelist.user.description"),
+          })
+          .addStringOption((opt) =>
+            opt
+              .setName("action")
+              .setDescription(
+                t("en", "command.config.mention-whitelist.options.action.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.mention-whitelist.options.action.description"),
+              })
+              .setRequired(true)
+              .addChoices(
+                {
+                  name: t("en", "command.config.mention-whitelist.options.action.choices.add"),
+                  value: "add",
+                  name_localizations: {
+                    ja: t("ja", "command.config.mention-whitelist.options.action.choices.add"),
+                  },
+                },
+                {
+                  name: t("en", "command.config.mention-whitelist.options.action.choices.remove"),
+                  value: "remove",
+                  name_localizations: {
+                    ja: t("ja", "command.config.mention-whitelist.options.action.choices.remove"),
+                  },
+                },
+              ),
+          )
+          .addUserOption((opt) =>
+            opt
+              .setName("user")
+              .setDescription(
+                t("en", "command.config.mention-whitelist.user.options.user.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.mention-whitelist.user.options.user.description"),
+              })
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("role")
+          .setDescription(t("en", "command.config.mention-whitelist.role.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.config.mention-whitelist.role.description"),
+          })
+          .addStringOption((opt) =>
+            opt
+              .setName("action")
+              .setDescription(
+                t("en", "command.config.mention-whitelist.options.action.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.mention-whitelist.options.action.description"),
+              })
+              .setRequired(true)
+              .addChoices(
+                {
+                  name: t("en", "command.config.mention-whitelist.options.action.choices.add"),
+                  value: "add",
+                  name_localizations: {
+                    ja: t("ja", "command.config.mention-whitelist.options.action.choices.add"),
+                  },
+                },
+                {
+                  name: t("en", "command.config.mention-whitelist.options.action.choices.remove"),
+                  value: "remove",
+                  name_localizations: {
+                    ja: t("ja", "command.config.mention-whitelist.options.action.choices.remove"),
+                  },
+                },
+              ),
+          )
+          .addRoleOption((opt) =>
+            opt
+              .setName("role")
+              .setDescription(
+                t("en", "command.config.mention-whitelist.role.options.role.description"),
+              )
+              .setDescriptionLocalizations({
+                ja: t("ja", "command.config.mention-whitelist.role.options.role.description"),
+              })
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("list")
+          .setDescription(t("en", "command.config.mention-whitelist.list.description"))
+          .setDescriptionLocalizations({
+            ja: t("ja", "command.config.mention-whitelist.list.description"),
+          }),
+      ),
+  )
+
   .addSubcommand((sub) =>
     sub
       .setName("view")

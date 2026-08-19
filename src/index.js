@@ -127,7 +127,7 @@ function autoRefresh(client) {
     const guild = guilds[idx++];
     setImmediate(async () => {
       try {
-        const { auditProfile } = await import("./modules/userProfile.js");
+        const { auditAndTrackProfile } = await import("./modules/userProfile.js");
         const { enqueue } = await import("./utils/telemetryQueue.js");
         const { getGuildLanguage } = await import("./core/locale.js");
         const { getDatabase } = await import("./core/database.js");
@@ -143,25 +143,36 @@ function autoRefresh(client) {
 
         const profileEnabled = mod && mod.is_enabled === 1;
         let flagged = 0;
+        let cleared = 0;
 
         for (const [, member] of guild.members.cache) {
           if (member.user.bot) {
             continue;
           }
-          const profile = auditProfile(member, lang);
-          if (profile.reasons.length > 0 && profileEnabled) {
+          const profile = auditAndTrackProfile(member, lang, guild.id);
+          if (profile.state === "new" && profileEnabled) {
             flagged++;
             enqueue(
               "flag",
               guild.id,
               `${LOG_TAG} ${t(lang, "telemetry.flag.refresh", { user: `<@${member.id}>`, userId: member.id, reasons: profile.reasons.join(", "), multiplier: profile.multiplier })}`,
             );
+          } else if (profile.state === "cleared") {
+            cleared++;
+            enqueue(
+              "flag",
+              guild.id,
+              t(lang, "reply.flag.cleared", {
+                userId: member.id,
+                reasons: profile.reasons.join("; "),
+              }),
+            );
           }
         }
 
         clog(
           console.log,
-          `${LOG_TAG} Auto-refresh: guild ${guild.id} (${guild.name}) scanned ${guild.members.cache.size} members, flagged ${flagged}`,
+          `${LOG_TAG} Auto-refresh: guild ${guild.id} (${guild.name}) scanned ${guild.members.cache.size} members, flagged ${flagged}, cleared ${cleared}`,
         );
       } catch (err) {
         clog(console.error, `${LOG_TAG} Auto-refresh error for guild ${guild.id}:`, err);

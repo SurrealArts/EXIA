@@ -88,9 +88,25 @@ function createTables() {
       started_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS MentionUserWhitelist (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (guild_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS MentionRoleWhitelist (
+      guild_id TEXT NOT NULL,
+      role_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (guild_id, role_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_module_weights_guild ON ModuleWeights(guild_id);
     CREATE INDEX IF NOT EXISTS idx_threshold_tier ON ThresholdActions(pressure_tier);
     CREATE INDEX IF NOT EXISTS idx_regex_rules_guild ON RegexRules(guild_id);
+    CREATE INDEX IF NOT EXISTS idx_mention_user_whitelist_guild ON MentionUserWhitelist(guild_id);
+    CREATE INDEX IF NOT EXISTS idx_mention_role_whitelist_guild ON MentionRoleWhitelist(guild_id);
   `);
 }
 
