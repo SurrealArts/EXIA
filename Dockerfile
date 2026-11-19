@@ -8,7 +8,7 @@ RUN apt-get update -y && \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g pnpm@11.12.0
+RUN npm install -g pnpm@11.22.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -20,7 +20,7 @@ FROM node:26-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN npm install -g pnpm@11.12.0
+RUN npm install -g pnpm@11.22.0
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
